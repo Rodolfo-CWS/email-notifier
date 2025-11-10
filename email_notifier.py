@@ -78,6 +78,13 @@ def get_email_body(msg):
 def summarize_email(sender, subject, body):
     """Resume el email usando GPT-4o-mini"""
     try:
+        # Crear cliente OpenAI sin proxies
+        import os
+        os.environ.pop('http_proxy', None)
+        os.environ.pop('https_proxy', None)
+        os.environ.pop('HTTP_PROXY', None)
+        os.environ.pop('HTTPS_PROXY', None)
+        
         client = OpenAI(api_key=OPENAI_API_KEY)
         
         prompt = f"""Resume este email en máximo 15 palabras, mencionando el remitente y el tema clave.
