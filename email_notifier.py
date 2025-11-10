@@ -63,13 +63,14 @@ def is_email_recent(msg, max_days=7):
             return True
 
         email_date = parsedate_to_datetime(date_str)
-        # Hacer el datetime offset-aware si no lo es
-        if email_date.tzinfo is None:
+
+        # Normalizar a datetime naive para comparación
+        if email_date.tzinfo is not None:
             email_date = email_date.replace(tzinfo=None)
 
         # Calcular la diferencia
         now = datetime.now()
-        age_days = (now - email_date.replace(tzinfo=None)).days
+        age_days = (now - email_date).days
 
         return age_days <= max_days
     except Exception as e:
@@ -195,10 +196,19 @@ def check_emails():
                     msg = email.message_from_bytes(response_part[1])
 
                     # Verificar si el email tiene menos de una semana
+                    email_date_str = msg.get('Date', 'Sin fecha')
                     if not is_email_recent(msg, max_days=7):
                         print(f"\n--- Email ignorado (más de 7 días) ---")
                         print(f"De: {msg.get('From', 'Desconocido')}")
-                        print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                        print(f"Fecha: {email_date_str}")
+                        try:
+                            parsed_date = parsedate_to_datetime(email_date_str)
+                            if parsed_date.tzinfo is not None:
+                                parsed_date = parsed_date.replace(tzinfo=None)
+                            age_days = (datetime.now() - parsed_date).days
+                            print(f"Antigüedad: {age_days} días")
+                        except:
+                            pass
                         # Guardar como procesado para no revisarlo de nuevo
                         save_last_processed_id(num_id)
                         continue
