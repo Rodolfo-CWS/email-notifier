@@ -1,8 +1,9 @@
 import imaplib
 import email
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from openai import OpenAI
 import time
@@ -53,10 +54,33 @@ def decode_email_subject(subject):
     
     return ''.join(subject_parts)
 
+def is_email_recent(msg, max_days=7):
+    """Verifica si el email tiene menos de max_days días de antigüedad"""
+    try:
+        date_str = msg.get('Date')
+        if not date_str:
+            # Si no tiene fecha, asumimos que es reciente para no perderlo
+            return True
+
+        email_date = parsedate_to_datetime(date_str)
+        # Hacer el datetime offset-aware si no lo es
+        if email_date.tzinfo is None:
+            email_date = email_date.replace(tzinfo=None)
+
+        # Calcular la diferencia
+        now = datetime.now()
+        age_days = (now - email_date.replace(tzinfo=None)).days
+
+        return age_days <= max_days
+    except Exception as e:
+        print(f"Error al verificar fecha del email: {e}")
+        # En caso de error, procesamos el email para no perderlo
+        return True
+
 def get_email_body(msg):
     """Extrae el cuerpo del email"""
     body = ""
-    
+
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
@@ -71,7 +95,7 @@ def get_email_body(msg):
             body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
         except:
             body = str(msg.get_payload())
-    
+
     # Limitar a primeros 1000 caracteres para el resumen
     return body[:1000]
 
@@ -158,37 +182,47 @@ def check_emails():
         # Procesar cada email nuevo
         for email_id in email_ids:
             num_id = int(email_id)
-            
+
             # Si ya procesamos este email, saltarlo
             if last_id and num_id <= last_id:
                 continue
-            
+
             # Obtener email
             status, msg_data = mail.fetch(email_id, '(RFC822)')
-            
+
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
-                    
+
+                    # Verificar si el email tiene menos de una semana
+                    if not is_email_recent(msg, max_days=7):
+                        print(f"\n--- Email ignorado (más de 7 días) ---")
+                        print(f"De: {msg.get('From', 'Desconocido')}")
+                        print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                        # Guardar como procesado para no revisarlo de nuevo
+                        save_last_processed_id(num_id)
+                        continue
+
                     # Extraer información
                     sender = msg.get('From', 'Desconocido')
                     subject = decode_email_subject(msg.get('Subject'))
                     body = get_email_body(msg)
-                    
+
                     print(f"\n--- Procesando email ---")
                     print(f"De: {sender}")
                     print(f"Asunto: {subject}")
-                    
+                    print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+
                     # Resumir con GPT
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
-                    
+
                     # Enviar notificación
                     send_telegram_notification(summary)
-                    
+
                     # Guardar último ID procesado
                     save_last_processed_id(num_id)
-                    
+
                     time.sleep(1)  # Evitar rate limits
         
         mail.logout()
