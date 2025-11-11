@@ -7,7 +7,7 @@ Recibe notificaciones automáticas en Telegram con resúmenes de tus emails usan
 - ✅ Lee emails vía IMAP
 - ✅ Resume emails con GPT-4o-mini
 - ✅ Notificaciones automáticas en Telegram
-- ✅ Botón en Telegram para abrir el email directamente
+- ✅ Botón en Telegram que abre la app Mail nativa (iPhone/iOS) 📱
 - ✅ Tracking de emails procesados
 - ✅ Deploy gratuito en Render
 
@@ -54,13 +54,15 @@ WEBMAIL_URL=https://cwscompany.com/webmail
 WEBMAIL_TYPE=roundcube
 ```
 
-**Configuración del botón de Webmail:**
-- `WEBMAIL_URL`: La URL exacta que usas para acceder a tu webmail desde el navegador
-  - Ejemplo: `https://cwscompany.com/webmail`
-  - **Importante:** Usa exactamente la misma URL que abres normalmente en tu navegador
-- `WEBMAIL_TYPE`: Puedes dejarlo en `generic` o cambiar según tu sistema
+**Configuración del botón en Telegram:**
+- El botón **"📬 Abrir Email"** usa un enlace `mailto:` que abre la **app Mail nativa** en iPhone/iOS
+- Al hacer clic, se abre Mail con el remitente del email listo para responder
+- Puedes cancelar la respuesta y buscar el email original en tu bandeja
+- **Ventaja:** No requiere autenticación en webmail, funciona directamente con tu app Mail configurada
 
-**Nota:** El botón simplemente abre tu webmail. Desde ahí puedes ver tus emails más recientes. Esta es la forma más compatible que funciona en todos los dispositivos (iPhone, Android, desktop).
+**Variables opcionales:**
+- `WEBMAIL_URL`: URL de respaldo si no hay remitente disponible
+- `WEBMAIL_TYPE`: Tipo de webmail (solo se usa como fallback)
 
 ### 4. Probar localmente
 ```bash
@@ -150,7 +152,11 @@ Deberías recibir algo como:
 [📬 Abrir Email] <- Botón clickeable
 ```
 
-El botón te llevará directamente al email en tu webmail.
+**Al hacer clic en el botón desde tu iPhone:**
+- Se abrirá la app Mail nativa automáticamente
+- Verás una pantalla para responder al remitente
+- Puedes cancelar y buscar el email en tu bandeja
+- **No necesitas login** - usa tu app Mail ya configurada
 
 ## 📁 Estructura del Proyecto
 
@@ -194,14 +200,16 @@ email-notifier/
 - Configura cron job externo cada 10-14 min
 - O usa Render Cron Jobs
 
-### El botón de webmail muestra pantalla en blanco en iPhone
-- **Solución:** Asegúrate de usar la URL EXACTA que abres en tu navegador
-- Abre tu webmail en Safari en el iPhone
-- Copia la URL completa de la barra de direcciones
-- Usa esa URL exacta en `WEBMAIL_URL`
-- No agregues parámetros ni barras al final
-- Ejemplo correcto: `https://cwscompany.com/webmail`
-- Si sigue fallando, intenta con `http://` en lugar de `https://` (menos seguro pero puede funcionar)
+### El botón no funciona en iPhone
+- **Solución actual:** El botón ahora usa `mailto:` que abre la app Mail nativa
+- Esto es mucho más confiable que abrir webmail en el navegador
+- Asegúrate de tener configurada tu cuenta de email en la app Mail de iOS
+- El botón abrirá Mail con el remitente del email
+- Puedes cancelar la respuesta y buscar el email original
+
+### Quiero que abra webmail en lugar de la app Mail
+- Esto no es recomendado porque requiere autenticación cada vez
+- Si lo prefieres, modifica la función `build_email_url()` en `email_notifier.py`
 
 ## 🔒 Seguridad
 

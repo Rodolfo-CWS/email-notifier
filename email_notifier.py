@@ -9,6 +9,7 @@ from openai import OpenAI
 import time
 import json
 from urllib.parse import quote
+import re
 
 # Configuración desde variables de entorno
 IMAP_SERVER = os.getenv('IMAP_SERVER', 'mail.cwscompany.com')
@@ -142,14 +143,29 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         print(f"Error al resumir email: {e}")
         return f"{sender}: {subject}"
 
-def build_email_url(message_id=None, subject=None):
-    """Construye la URL del webmail según el tipo configurado"""
-    base_url = WEBMAIL_URL.rstrip('/')
+def build_email_url(message_id=None, subject=None, sender=None):
+    """Construye la URL para abrir el email"""
 
-    # IMPORTANTE: Para máxima compatibilidad, especialmente en dispositivos móviles,
-    # simplemente retornamos la URL base sin parámetros adicionales.
-    # Esto evita problemas de pantalla en blanco en iPhone y otros dispositivos.
-    return base_url
+    # Si tenemos remitente, crear un mailto: link que abre la app Mail nativa
+    # Esto funciona mucho mejor en iPhone que abrir webmail
+    if sender:
+        # Extraer el email del remitente (formato puede ser "Nombre <email@domain.com>")
+        email_match = re.search(r'<(.+?)>', sender)
+        sender_email = email_match.group(1) if email_match else sender
+
+        # Limpiar el asunto si existe
+        if subject:
+            # Remover caracteres problemáticos en URLs
+            clean_subject = subject.replace('\n', ' ').replace('\r', ' ')
+            # URL encode será manejado por Telegram
+            mailto_url = f"mailto:{sender_email}?subject=Re: {clean_subject}"
+        else:
+            mailto_url = f"mailto:{sender_email}"
+
+        return mailto_url
+
+    # Si no tenemos remitente, usar webmail como fallback
+    return WEBMAIL_URL.rstrip('/')
 
 def send_telegram_notification(message, sender="", subject="", message_id=None):
     """Envía notificación por Telegram con botón para abrir el email"""
@@ -163,14 +179,14 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
 
         # Agregar botón inline si tenemos información del email
         if sender or subject or message_id:
-            # Construir URL apropiada para el webmail
-            email_url = build_email_url(message_id, subject)
+            # Construir URL apropiada (mailto: para abrir app Mail nativa)
+            email_url = build_email_url(message_id, subject, sender)
 
             # Crear el inline keyboard con el botón
             keyboard = {
                 "inline_keyboard": [[
                     {
-                        "text": "📬 Abrir Webmail",
+                        "text": "📬 Abrir Email",
                         "url": email_url
                     }
                 ]]
