@@ -233,16 +233,19 @@ def check_emails():
             return
 
         print(f"📬 {len(email_ids)} email(s) nuevo(s)", flush=True)
-        
+
         # Obtener último ID procesado
         last_id = get_last_processed_id()
-        
+        print(f"   Último ID procesado: {last_id}", flush=True)
+        print(f"   IDs de emails encontrados: {[int(eid) for eid in email_ids]}", flush=True)
+
         # Procesar cada email nuevo
         for email_id in email_ids:
             num_id = int(email_id)
 
             # Si ya procesamos este email, saltarlo
             if last_id and num_id <= last_id:
+                print(f"   ⏭️  Saltando email ID {num_id} (ya procesado, last_id={last_id})", flush=True)
                 continue
 
             # Obtener email SIN marcarlo como leído usando BODY.PEEK
