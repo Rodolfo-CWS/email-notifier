@@ -55,14 +55,12 @@ WEBMAIL_TYPE=roundcube
 ```
 
 **Configuración del botón de Webmail:**
-- `WEBMAIL_URL`: URL de tu servidor webmail (ejemplo: `https://cwscompany.com/webmail`)
-- `WEBMAIL_TYPE`: Tipo de webmail (opciones: `generic`, `roundcube`, `cpanel`, `gmail`)
-  - `generic`: Abre la URL base del webmail
-  - `roundcube`: Abre directamente la bandeja de entrada de Roundcube
-  - `cpanel`: Para webmail de cPanel
-  - `gmail`: Abre Gmail inbox
+- `WEBMAIL_URL`: La URL exacta que usas para acceder a tu webmail desde el navegador
+  - Ejemplo: `https://cwscompany.com/webmail`
+  - **Importante:** Usa exactamente la misma URL que abres normalmente en tu navegador
+- `WEBMAIL_TYPE`: Puedes dejarlo en `generic` o cambiar según tu sistema
 
-**Nota:** El botón abre la bandeja de entrada del webmail, no el email específico. Esto garantiza mejor compatibilidad y funcionamiento en todos los dispositivos.
+**Nota:** El botón simplemente abre tu webmail. Desde ahí puedes ver tus emails más recientes. Esta es la forma más compatible que funciona en todos los dispositivos (iPhone, Android, desktop).
 
 ### 4. Probar localmente
 ```bash
@@ -196,11 +194,14 @@ email-notifier/
 - Configura cron job externo cada 10-14 min
 - O usa Render Cron Jobs
 
-### El botón de webmail no funciona o muestra pantalla en blanco
-- Usa `WEBMAIL_TYPE=generic` (es el más compatible)
-- Verifica que `WEBMAIL_URL` sea correcta (sin `/` al final)
-- Con `generic`, el botón abre la bandeja de entrada, no el email específico
-- Para URLs específicas por email, necesitas conocer el formato exacto de tu webmail
+### El botón de webmail muestra pantalla en blanco en iPhone
+- **Solución:** Asegúrate de usar la URL EXACTA que abres en tu navegador
+- Abre tu webmail en Safari en el iPhone
+- Copia la URL completa de la barra de direcciones
+- Usa esa URL exacta en `WEBMAIL_URL`
+- No agregues parámetros ni barras al final
+- Ejemplo correcto: `https://cwscompany.com/webmail`
+- Si sigue fallando, intenta con `http://` en lugar de `https://` (menos seguro pero puede funcionar)
 
 ## 🔒 Seguridad
 

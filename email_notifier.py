@@ -18,7 +18,7 @@ EMAIL_PASS = os.getenv('EMAIL_PASS')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-WEBMAIL_URL = os.getenv('WEBMAIL_URL', 'https://mail.cwscompany.com')
+WEBMAIL_URL = os.getenv('WEBMAIL_URL', 'https://cwscompany.com/webmail')
 WEBMAIL_TYPE = os.getenv('WEBMAIL_TYPE', 'generic')  # roundcube, cpanel, generic
 
 # Archivo para trackear último email procesado
