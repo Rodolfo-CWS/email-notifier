@@ -168,7 +168,7 @@ def build_email_url(message_id=None, subject=None, sender=None):
     return WEBMAIL_URL.rstrip('/')
 
 def send_telegram_notification(message, sender="", subject="", message_id=None):
-    """Envía notificación por Telegram con botón para abrir el email"""
+    """Envía notificación por Telegram con email clickeable"""
     try:
         print(f"\n🔔 Enviando notificación a Telegram...", flush=True)
 
@@ -179,9 +179,10 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
             sender_email = email_match.group(1) if email_match else sender
 
         # Construir mensaje con el email del remitente
+        # En Telegram, los emails son automáticamente clickeables y abren Mail nativa
         telegram_message = f"📧 {message}"
         if sender_email:
-            telegram_message += f"\n\nDe: {sender_email}"
+            telegram_message += f"\n\n✉️ {sender_email}"
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
@@ -189,24 +190,6 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
             "text": telegram_message,
             "parse_mode": "HTML"
         }
-
-        # Agregar botón inline para abrir webmail
-        # Usamos la URL del webmail porque Telegram no acepta mailto: en botones
-        email_url = WEBMAIL_URL.rstrip('/')
-
-        print(f"   Botón URL: {email_url}", flush=True)
-
-        # Crear el inline keyboard con el botón
-        keyboard = {
-            "inline_keyboard": [[
-                {
-                    "text": "📬 Abrir Webmail",
-                    "url": email_url
-                }
-            ]]
-        }
-
-        data["reply_markup"] = json.dumps(keyboard)
 
         print(f"   Chat ID: {TELEGRAM_CHAT_ID}", flush=True)
         print(f"   Mensaje: {telegram_message}", flush=True)
