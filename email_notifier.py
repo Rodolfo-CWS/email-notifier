@@ -172,33 +172,44 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
     try:
         print(f"\n🔔 Enviando notificación a Telegram...", flush=True)
 
+        # Extraer email del remitente para mostrarlo en el mensaje
+        sender_email = ""
+        if sender:
+            email_match = re.search(r'<(.+?)>', sender)
+            sender_email = email_match.group(1) if email_match else sender
+
+        # Construir mensaje con el email del remitente
+        telegram_message = f"📧 {message}"
+        if sender_email:
+            telegram_message += f"\n\nDe: {sender_email}"
+
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": f"📧 {message}",
+            "text": telegram_message,
             "parse_mode": "HTML"
         }
 
-        # Agregar botón inline si tenemos información del email
-        if sender or subject or message_id:
-            # Construir URL apropiada (mailto: para abrir app Mail nativa)
-            email_url = build_email_url(message_id, subject, sender)
-            print(f"   Botón URL: {email_url}", flush=True)
+        # Agregar botón inline para abrir webmail
+        # Usamos la URL del webmail porque Telegram no acepta mailto: en botones
+        email_url = WEBMAIL_URL.rstrip('/')
 
-            # Crear el inline keyboard con el botón
-            keyboard = {
-                "inline_keyboard": [[
-                    {
-                        "text": "📬 Abrir Email",
-                        "url": email_url
-                    }
-                ]]
-            }
+        print(f"   Botón URL: {email_url}", flush=True)
 
-            data["reply_markup"] = json.dumps(keyboard)
+        # Crear el inline keyboard con el botón
+        keyboard = {
+            "inline_keyboard": [[
+                {
+                    "text": "📬 Abrir Webmail",
+                    "url": email_url
+                }
+            ]]
+        }
+
+        data["reply_markup"] = json.dumps(keyboard)
 
         print(f"   Chat ID: {TELEGRAM_CHAT_ID}", flush=True)
-        print(f"   Mensaje: {message}", flush=True)
+        print(f"   Mensaje: {telegram_message}", flush=True)
 
         response = requests.post(url, data=data)
         result = response.json()
