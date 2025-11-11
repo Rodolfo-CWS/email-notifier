@@ -50,17 +50,19 @@ TELEGRAM_CHAT_ID=987654321
 
 OPENAI_API_KEY=sk-proj-abc123...
 
-WEBMAIL_URL=https://mail.cwscompany.com
-WEBMAIL_TYPE=generic
+WEBMAIL_URL=https://cwscompany.com/webmail
+WEBMAIL_TYPE=roundcube
 ```
 
 **Configuración del botón de Webmail:**
-- `WEBMAIL_URL`: URL de tu servidor webmail
+- `WEBMAIL_URL`: URL de tu servidor webmail (ejemplo: `https://cwscompany.com/webmail`)
 - `WEBMAIL_TYPE`: Tipo de webmail (opciones: `generic`, `roundcube`, `cpanel`, `gmail`)
-  - `generic` (recomendado): Abre la bandeja de entrada - funciona con cualquier servidor
-  - `roundcube`: Intenta buscar el email específico en Roundcube
-  - `cpanel`: Para webmail de cPanel (usa Roundcube internamente)
-  - `gmail`: Abre Gmail (si usas Gmail)
+  - `generic`: Abre la URL base del webmail
+  - `roundcube`: Abre directamente la bandeja de entrada de Roundcube
+  - `cpanel`: Para webmail de cPanel
+  - `gmail`: Abre Gmail inbox
+
+**Nota:** El botón abre la bandeja de entrada del webmail, no el email específico. Esto garantiza mejor compatibilidad y funcionamiento en todos los dispositivos.
 
 ### 4. Probar localmente
 ```bash
@@ -99,8 +101,8 @@ EMAIL_PASS = tu_contraseña
 TELEGRAM_BOT_TOKEN = 123456789:ABCdef...
 TELEGRAM_CHAT_ID = 987654321
 OPENAI_API_KEY = sk-proj-abc123...
-WEBMAIL_URL = https://mail.cwscompany.com
-WEBMAIL_TYPE = generic
+WEBMAIL_URL = https://cwscompany.com/webmail
+WEBMAIL_TYPE = roundcube
 ```
 
 ### 3. Deploy

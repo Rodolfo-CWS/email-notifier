@@ -152,17 +152,18 @@ def build_email_url(message_id=None, subject=None):
 
     # Limpiar el Message-ID (remover < y > si existen)
     clean_message_id = message_id.strip('<>')
-    encoded_message_id = quote(clean_message_id, safe='')
 
     # Construir URL según el tipo de webmail
     if WEBMAIL_TYPE == 'roundcube':
-        # Roundcube: buscar por Message-ID en la bandeja
-        return f"{base_url}/?_task=mail&_action=show&_search=1&_q={encoded_message_id}"
+        # Roundcube: abrir bandeja de entrada directamente
+        # La búsqueda por Message-ID desde URL externa no es confiable en Roundcube
+        # Es mejor abrir la bandeja donde el usuario puede ver sus emails recientes
+        return f"{base_url}/?_task=mail&_mbox=INBOX"
 
     elif WEBMAIL_TYPE == 'cpanel':
         # cPanel generalmente usa Roundcube o Horde
         # Intentar formato de Roundcube
-        return f"{base_url}/?_task=mail&_action=show&_search=1&_q={encoded_message_id}"
+        return f"{base_url}/?_task=mail&_mbox=INBOX"
 
     elif WEBMAIL_TYPE == 'gmail':
         # Gmail no soporta búsqueda directa por Message-ID desde URL externa
