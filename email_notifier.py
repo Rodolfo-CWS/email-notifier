@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import requests
 from openai import OpenAI
 import time
+import json
 
 # Configuración desde variables de entorno
 IMAP_SERVER = os.getenv('IMAP_SERVER', 'mail.cwscompany.com')
@@ -16,6 +17,7 @@ EMAIL_PASS = os.getenv('EMAIL_PASS')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+WEBMAIL_URL = os.getenv('WEBMAIL_URL', 'https://mail.cwscompany.com')
 
 # Archivo para trackear último email procesado
 LAST_EMAIL_FILE = '/tmp/last_email_id.txt'
@@ -138,8 +140,8 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         print(f"Error al resumir email: {e}")
         return f"{sender}: {subject}"
 
-def send_telegram_notification(message):
-    """Envía notificación por Telegram"""
+def send_telegram_notification(message, sender="", subject="", message_id=None):
+    """Envía notificación por Telegram con botón para abrir el email"""
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
@@ -147,6 +149,30 @@ def send_telegram_notification(message):
             "text": f"📧 {message}",
             "parse_mode": "HTML"
         }
+
+        # Agregar botón inline si tenemos información del email
+        if sender or subject or message_id:
+            # Crear URL del webmail
+            email_url = WEBMAIL_URL
+
+            # Si tenemos Message-ID, agregarlo como parámetro de búsqueda
+            if message_id:
+                # Limpiar el Message-ID (remover < y > si existen)
+                clean_message_id = message_id.strip('<>')
+                email_url = f"{WEBMAIL_URL}?message_id={clean_message_id}"
+
+            # Crear el inline keyboard con el botón
+            keyboard = {
+                "inline_keyboard": [[
+                    {
+                        "text": "📬 Abrir Email",
+                        "url": email_url
+                    }
+                ]]
+            }
+
+            data["reply_markup"] = json.dumps(keyboard)
+
         response = requests.post(url, data=data)
         return response.json()
     except Exception as e:
@@ -207,18 +233,21 @@ def check_emails():
                     sender = msg.get('From', 'Desconocido')
                     subject = decode_email_subject(msg.get('Subject'))
                     body = get_email_body(msg)
+                    message_id = msg.get('Message-ID', None)
 
                     print(f"\n--- Procesando email ---")
                     print(f"De: {sender}")
                     print(f"Asunto: {subject}")
                     print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                    if message_id:
+                        print(f"Message-ID: {message_id}")
 
                     # Resumir con GPT
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
 
-                    # Enviar notificación
-                    send_telegram_notification(summary)
+                    # Enviar notificación con botón para abrir el email
+                    send_telegram_notification(summary, sender, subject, message_id)
 
                     # Guardar último ID procesado
                     save_last_processed_id(num_id)

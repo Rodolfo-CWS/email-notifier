@@ -7,6 +7,7 @@ Recibe notificaciones automáticas en Telegram con resúmenes de tus emails usan
 - ✅ Lee emails vía IMAP
 - ✅ Resume emails con GPT-4o-mini
 - ✅ Notificaciones automáticas en Telegram
+- ✅ Botón en Telegram para abrir el email directamente
 - ✅ Tracking de emails procesados
 - ✅ Deploy gratuito en Render
 
@@ -48,7 +49,11 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 TELEGRAM_CHAT_ID=987654321
 
 OPENAI_API_KEY=sk-proj-abc123...
+
+WEBMAIL_URL=https://mail.cwscompany.com
 ```
+
+**Nota sobre WEBMAIL_URL**: Esta URL se usa para el botón "Abrir Email" en los mensajes de Telegram. Si tu servidor de correo tiene una interfaz webmail, puedes configurar esta URL para que el botón redirija directamente al email.
 
 ### 4. Probar localmente
 ```bash
@@ -87,6 +92,7 @@ EMAIL_PASS = tu_contraseña
 TELEGRAM_BOT_TOKEN = 123456789:ABCdef...
 TELEGRAM_CHAT_ID = 987654321
 OPENAI_API_KEY = sk-proj-abc123...
+WEBMAIL_URL = https://mail.cwscompany.com
 ```
 
 ### 3. Deploy
@@ -133,7 +139,10 @@ Visita: `https://tu-app.onrender.com/check`
 Deberías recibir algo como:
 ```
 📧 Juan de Ventas pregunta por cotización de proyecto
+[📬 Abrir Email] <- Botón clickeable
 ```
+
+El botón te llevará directamente al email en tu webmail.
 
 ## 📁 Estructura del Proyecto
 
