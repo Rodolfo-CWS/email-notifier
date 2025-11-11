@@ -170,6 +170,8 @@ def build_email_url(message_id=None, subject=None, sender=None):
 def send_telegram_notification(message, sender="", subject="", message_id=None):
     """Envía notificación por Telegram con botón para abrir el email"""
     try:
+        print(f"\n🔔 Enviando notificación a Telegram...", flush=True)
+
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
@@ -181,6 +183,7 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
         if sender or subject or message_id:
             # Construir URL apropiada (mailto: para abrir app Mail nativa)
             email_url = build_email_url(message_id, subject, sender)
+            print(f"   Botón URL: {email_url}", flush=True)
 
             # Crear el inline keyboard con el botón
             keyboard = {
@@ -194,10 +197,24 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
 
             data["reply_markup"] = json.dumps(keyboard)
 
+        print(f"   Chat ID: {TELEGRAM_CHAT_ID}", flush=True)
+        print(f"   Mensaje: {message}", flush=True)
+
         response = requests.post(url, data=data)
-        return response.json()
+        result = response.json()
+
+        print(f"   Respuesta Telegram: {result}", flush=True)
+
+        if result.get('ok'):
+            print(f"✅ Notificación enviada exitosamente a Telegram", flush=True)
+        else:
+            print(f"❌ Telegram respondió con error: {result}", flush=True)
+
+        return result
     except Exception as e:
-        print(f"Error al enviar notificación Telegram: {e}", flush=True)
+        print(f"❌ Error al enviar notificación Telegram: {e}", flush=True)
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}", flush=True)
         return None
 
 def check_emails():
