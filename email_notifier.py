@@ -8,6 +8,7 @@ import requests
 from openai import OpenAI
 import time
 import json
+from urllib.parse import quote
 
 # Configuración desde variables de entorno
 IMAP_SERVER = os.getenv('IMAP_SERVER', 'mail.cwscompany.com')
@@ -18,6 +19,7 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 WEBMAIL_URL = os.getenv('WEBMAIL_URL', 'https://mail.cwscompany.com')
+WEBMAIL_TYPE = os.getenv('WEBMAIL_TYPE', 'generic')  # roundcube, cpanel, generic
 
 # Archivo para trackear último email procesado
 LAST_EMAIL_FILE = '/tmp/last_email_id.txt'
@@ -140,6 +142,38 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         print(f"Error al resumir email: {e}")
         return f"{sender}: {subject}"
 
+def build_email_url(message_id=None, subject=None):
+    """Construye la URL del webmail según el tipo configurado"""
+    base_url = WEBMAIL_URL.rstrip('/')
+
+    # Si no hay Message-ID, solo retornar la URL base (bandeja de entrada)
+    if not message_id:
+        return base_url
+
+    # Limpiar el Message-ID (remover < y > si existen)
+    clean_message_id = message_id.strip('<>')
+    encoded_message_id = quote(clean_message_id, safe='')
+
+    # Construir URL según el tipo de webmail
+    if WEBMAIL_TYPE == 'roundcube':
+        # Roundcube: buscar por Message-ID en la bandeja
+        return f"{base_url}/?_task=mail&_action=show&_search=1&_q={encoded_message_id}"
+
+    elif WEBMAIL_TYPE == 'cpanel':
+        # cPanel generalmente usa Roundcube o Horde
+        # Intentar formato de Roundcube
+        return f"{base_url}/?_task=mail&_action=show&_search=1&_q={encoded_message_id}"
+
+    elif WEBMAIL_TYPE == 'gmail':
+        # Gmail no soporta búsqueda directa por Message-ID desde URL externa
+        # Retornar bandeja de entrada
+        return "https://mail.google.com/mail/u/0/#inbox"
+
+    else:  # 'generic' o cualquier otro
+        # Por defecto, solo abrir la bandeja de entrada
+        # Esto es más seguro y siempre funcionará
+        return base_url
+
 def send_telegram_notification(message, sender="", subject="", message_id=None):
     """Envía notificación por Telegram con botón para abrir el email"""
     try:
@@ -152,20 +186,14 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
 
         # Agregar botón inline si tenemos información del email
         if sender or subject or message_id:
-            # Crear URL del webmail
-            email_url = WEBMAIL_URL
-
-            # Si tenemos Message-ID, agregarlo como parámetro de búsqueda
-            if message_id:
-                # Limpiar el Message-ID (remover < y > si existen)
-                clean_message_id = message_id.strip('<>')
-                email_url = f"{WEBMAIL_URL}?message_id={clean_message_id}"
+            # Construir URL apropiada para el webmail
+            email_url = build_email_url(message_id, subject)
 
             # Crear el inline keyboard con el botón
             keyboard = {
                 "inline_keyboard": [[
                     {
-                        "text": "📬 Abrir Email",
+                        "text": "📬 Abrir Webmail",
                         "url": email_url
                     }
                 ]]

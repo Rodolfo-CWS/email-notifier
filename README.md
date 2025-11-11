@@ -51,9 +51,16 @@ TELEGRAM_CHAT_ID=987654321
 OPENAI_API_KEY=sk-proj-abc123...
 
 WEBMAIL_URL=https://mail.cwscompany.com
+WEBMAIL_TYPE=generic
 ```
 
-**Nota sobre WEBMAIL_URL**: Esta URL se usa para el botón "Abrir Email" en los mensajes de Telegram. Si tu servidor de correo tiene una interfaz webmail, puedes configurar esta URL para que el botón redirija directamente al email.
+**Configuración del botón de Webmail:**
+- `WEBMAIL_URL`: URL de tu servidor webmail
+- `WEBMAIL_TYPE`: Tipo de webmail (opciones: `generic`, `roundcube`, `cpanel`, `gmail`)
+  - `generic` (recomendado): Abre la bandeja de entrada - funciona con cualquier servidor
+  - `roundcube`: Intenta buscar el email específico en Roundcube
+  - `cpanel`: Para webmail de cPanel (usa Roundcube internamente)
+  - `gmail`: Abre Gmail (si usas Gmail)
 
 ### 4. Probar localmente
 ```bash
@@ -93,6 +100,7 @@ TELEGRAM_BOT_TOKEN = 123456789:ABCdef...
 TELEGRAM_CHAT_ID = 987654321
 OPENAI_API_KEY = sk-proj-abc123...
 WEBMAIL_URL = https://mail.cwscompany.com
+WEBMAIL_TYPE = generic
 ```
 
 ### 3. Deploy
@@ -185,6 +193,12 @@ email-notifier/
 ### Render se duerme
 - Configura cron job externo cada 10-14 min
 - O usa Render Cron Jobs
+
+### El botón de webmail no funciona o muestra pantalla en blanco
+- Usa `WEBMAIL_TYPE=generic` (es el más compatible)
+- Verifica que `WEBMAIL_URL` sea correcta (sin `/` al final)
+- Con `generic`, el botón abre la bandeja de entrada, no el email específico
+- Para URLs específicas por email, necesitas conocer el formato exacto de tu webmail
 
 ## 🔒 Seguridad
 
