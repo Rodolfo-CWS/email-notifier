@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 import os
+import sys
 from email_notifier import check_emails
 
 app = Flask(__name__)
@@ -16,10 +17,22 @@ def home():
 def check():
     """Endpoint para que el cron job ejecute la revisión de emails"""
     try:
+        print("=" * 50, flush=True)
+        print(f"[/check] Iniciando revisión de emails...", flush=True)
+        sys.stdout.flush()
+
         check_emails()
+
+        print(f"[/check] Revisión completada", flush=True)
+        sys.stdout.flush()
+        print("=" * 50, flush=True)
+
         return jsonify({"status": "success", "message": "Emails checked"})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        error_msg = str(e)
+        print(f"[/check] ERROR: {error_msg}", flush=True)
+        sys.stdout.flush()
+        return jsonify({"status": "error", "message": error_msg}), 500
 
 @app.route('/health')
 def health():

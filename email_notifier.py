@@ -78,7 +78,7 @@ def is_email_recent(msg, max_days=7):
 
         return age_days <= max_days
     except Exception as e:
-        print(f"Error al verificar fecha del email: {e}")
+        print(f"Error al verificar fecha del email: {e}", flush=True)
         # En caso de error, procesamos el email para no perderlo
         return True
 
@@ -140,7 +140,7 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         return summary
         
     except Exception as e:
-        print(f"Error al resumir email: {e}")
+        print(f"Error al resumir email: {e}", flush=True)
         return f"{sender}: {subject}"
 
 def build_email_url(message_id=None, subject=None, sender=None):
@@ -197,31 +197,31 @@ def send_telegram_notification(message, sender="", subject="", message_id=None):
         response = requests.post(url, data=data)
         return response.json()
     except Exception as e:
-        print(f"Error al enviar notificación Telegram: {e}")
+        print(f"Error al enviar notificación Telegram: {e}", flush=True)
         return None
 
 def check_emails():
     """Revisa emails nuevos y envía notificaciones"""
     try:
-        print(f"[{datetime.now()}] Conectando a {IMAP_SERVER}...")
-        
+        print(f"[{datetime.now()}] Conectando a {IMAP_SERVER}...", flush=True)
+
         # Conectar a IMAP
         mail = imaplib.IMAP4(IMAP_SERVER, IMAP_PORT)
         mail.login(EMAIL_USER, EMAIL_PASS)
         mail.select('INBOX')
-        
-        print("✅ Conectado exitosamente")
-        
+
+        print("✅ Conectado exitosamente", flush=True)
+
         # Buscar emails no leídos
         status, messages = mail.search(None, 'UNSEEN')
         email_ids = messages[0].split()
-        
+
         if not email_ids:
-            print("No hay emails nuevos")
+            print("No hay emails nuevos", flush=True)
             mail.logout()
             return
-        
-        print(f"📬 {len(email_ids)} email(s) nuevo(s)")
+
+        print(f"📬 {len(email_ids)} email(s) nuevo(s)", flush=True)
         
         # Obtener último ID procesado
         last_id = get_last_processed_id()
@@ -243,9 +243,9 @@ def check_emails():
 
                     # Verificar si el email tiene menos de una semana
                     if not is_email_recent(msg, max_days=7):
-                        print(f"\n--- Email ignorado (más de 7 días) ---")
-                        print(f"De: {msg.get('From', 'Desconocido')}")
-                        print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                        print(f"\n--- Email ignorado (más de 7 días) ---", flush=True)
+                        print(f"De: {msg.get('From', 'Desconocido')}", flush=True)
+                        print(f"Fecha: {msg.get('Date', 'Sin fecha')}", flush=True)
                         # Guardar como procesado para no revisarlo de nuevo
                         save_last_processed_id(num_id)
                         continue
@@ -256,16 +256,16 @@ def check_emails():
                     body = get_email_body(msg)
                     message_id = msg.get('Message-ID', None)
 
-                    print(f"\n--- Procesando email ---")
-                    print(f"De: {sender}")
-                    print(f"Asunto: {subject}")
-                    print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                    print(f"\n--- Procesando email ---", flush=True)
+                    print(f"De: {sender}", flush=True)
+                    print(f"Asunto: {subject}", flush=True)
+                    print(f"Fecha: {msg.get('Date', 'Sin fecha')}", flush=True)
                     if message_id:
-                        print(f"Message-ID: {message_id}")
+                        print(f"Message-ID: {message_id}", flush=True)
 
                     # Resumir con GPT
                     summary = summarize_email(sender, subject, body)
-                    print(f"Resumen: {summary}")
+                    print(f"Resumen: {summary}", flush=True)
 
                     # Enviar notificación con botón para abrir el email
                     send_telegram_notification(summary, sender, subject, message_id)
@@ -276,23 +276,23 @@ def check_emails():
                     time.sleep(1)  # Evitar rate limits
         
         mail.logout()
-        print(f"\n✅ Proceso completado [{datetime.now()}]\n")
-        
+        print(f"\n✅ Proceso completado [{datetime.now()}]\n", flush=True)
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error: {e}", flush=True)
 
 if __name__ == "__main__":
     # Verificar variables de entorno
     required_vars = ['EMAIL_USER', 'EMAIL_PASS', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'OPENAI_API_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
+
     if missing_vars:
-        print(f"❌ Faltan variables de entorno: {', '.join(missing_vars)}")
+        print(f"❌ Faltan variables de entorno: {', '.join(missing_vars)}", flush=True)
         exit(1)
-    
-    print("🚀 Iniciando Email Notifier...")
-    print(f"📧 Email: {EMAIL_USER}")
-    print(f"🤖 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...")
-    print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}")
-    
+
+    print("🚀 Iniciando Email Notifier...", flush=True)
+    print(f"📧 Email: {EMAIL_USER}", flush=True)
+    print(f"🤖 Bot Token: {TELEGRAM_BOT_TOKEN[:10]}...", flush=True)
+    print(f"💬 Chat ID: {TELEGRAM_CHAT_ID}", flush=True)
+
     check_emails()
