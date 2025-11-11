@@ -146,34 +146,10 @@ def build_email_url(message_id=None, subject=None):
     """Construye la URL del webmail según el tipo configurado"""
     base_url = WEBMAIL_URL.rstrip('/')
 
-    # Si no hay Message-ID, solo retornar la URL base (bandeja de entrada)
-    if not message_id:
-        return base_url
-
-    # Limpiar el Message-ID (remover < y > si existen)
-    clean_message_id = message_id.strip('<>')
-
-    # Construir URL según el tipo de webmail
-    if WEBMAIL_TYPE == 'roundcube':
-        # Roundcube: abrir bandeja de entrada directamente
-        # La búsqueda por Message-ID desde URL externa no es confiable en Roundcube
-        # Es mejor abrir la bandeja donde el usuario puede ver sus emails recientes
-        return f"{base_url}/?_task=mail&_mbox=INBOX"
-
-    elif WEBMAIL_TYPE == 'cpanel':
-        # cPanel generalmente usa Roundcube o Horde
-        # Intentar formato de Roundcube
-        return f"{base_url}/?_task=mail&_mbox=INBOX"
-
-    elif WEBMAIL_TYPE == 'gmail':
-        # Gmail no soporta búsqueda directa por Message-ID desde URL externa
-        # Retornar bandeja de entrada
-        return "https://mail.google.com/mail/u/0/#inbox"
-
-    else:  # 'generic' o cualquier otro
-        # Por defecto, solo abrir la bandeja de entrada
-        # Esto es más seguro y siempre funcionará
-        return base_url
+    # IMPORTANTE: Para máxima compatibilidad, especialmente en dispositivos móviles,
+    # simplemente retornamos la URL base sin parámetros adicionales.
+    # Esto evita problemas de pantalla en blanco en iPhone y otros dispositivos.
+    return base_url
 
 def send_telegram_notification(message, sender="", subject="", message_id=None):
     """Envía notificación por Telegram con botón para abrir el email"""
