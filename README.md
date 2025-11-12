@@ -114,11 +114,27 @@ Click en "Create Web Service" y espera el deploy.
 
 ## 🧪 Probar el Sistema
 
-### 1. Envíate un email de prueba
+### 1. Probar configuración de Telegram (IMPORTANTE)
+
+Antes de probar con emails, verifica que tu bot de Telegram está configurado correctamente:
+
+```bash
+python test_telegram.py
+```
+
+Este script verificará:
+- ✅ Variables de entorno configuradas
+- ✅ Token del bot válido
+- ✅ Chat ID correcto
+- ✅ Envío de mensaje de prueba
+
+Si todas las pruebas pasan, deberías recibir un mensaje de prueba en Telegram.
+
+### 2. Envíate un email de prueba
 
 Envía un email a tu cuenta configurada.
 
-### 2. Ejecutar manualmente
+### 3. Ejecutar manualmente
 
 **Localmente:**
 ```bash
@@ -128,7 +144,7 @@ python email_notifier.py
 **En Render:**
 Visita: `https://tu-app.onrender.com/check`
 
-### 3. Verificar Telegram
+### 4. Verificar Telegram
 
 Deberías recibir algo como:
 ```
@@ -168,10 +184,46 @@ email-notifier/
 - Verifica IMAP_SERVER y IMAP_PORT
 - Prueba puerto 993 si 143 no funciona
 
-### No llegan notificaciones
-- Verifica TELEGRAM_BOT_TOKEN
-- Verifica TELEGRAM_CHAT_ID
-- Prueba enviar mensaje manual al bot
+### No llegan notificaciones de Telegram
+
+**PRIMERO: Ejecuta el script de prueba**
+```bash
+python test_telegram.py
+```
+
+**Errores comunes:**
+
+1. **Error 400 - Bad Request**
+   - ❌ CHAT_ID incorrecto
+   - ❌ El bot no ha sido iniciado (envía /start al bot)
+   - ❌ Formato de CHAT_ID inválido
+   - ✅ Solución: Obtén tu CHAT_ID correcto:
+     ```bash
+     # 1. Envía un mensaje a tu bot en Telegram
+     # 2. Visita esta URL en tu navegador:
+     https://api.telegram.org/bot<TU_TOKEN>/getUpdates
+     # 3. Busca el campo "chat" -> "id"
+     ```
+
+2. **Error 401 - Unauthorized**
+   - ❌ TELEGRAM_BOT_TOKEN inválido
+   - ✅ Solución: Verifica el token con @BotFather
+
+3. **Error 403 - Forbidden**
+   - ❌ El bot fue bloqueado por el usuario
+   - ❌ El bot no tiene permisos en el grupo
+   - ✅ Solución:
+     - En chat privado: Desbloquea el bot y envía /start
+     - En grupo: Asegúrate de que el bot es administrador o tiene permisos para enviar mensajes
+
+4. **Las notificaciones se envían pero no llegan**
+   - Revisa que el CHAT_ID sea correcto
+   - Para grupos, el CHAT_ID suele ser negativo (ej: -1001234567890)
+   - Para usuarios, el CHAT_ID es positivo (ej: 123456789)
+
+5. **Timeout al enviar**
+   - Verifica tu conexión a internet
+   - Si estás en Render, verifica que el servicio esté activo
 
 ### Render se duerme
 - Configura cron job externo cada 10-14 min

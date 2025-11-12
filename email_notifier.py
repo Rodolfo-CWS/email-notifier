@@ -141,16 +141,40 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
 def send_telegram_notification(message):
     """Envía notificación por Telegram"""
     try:
+        # Validar variables de entorno
+        if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+            print("❌ Error: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no están configurados")
+            return None
+
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": f"📧 {message}",
             "parse_mode": "HTML"
         }
-        response = requests.post(url, data=data)
-        return response.json()
+
+        print(f"📤 Enviando notificación a Telegram...")
+        response = requests.post(url, data=data, timeout=10)
+        result = response.json()
+
+        # Verificar si la respuesta fue exitosa
+        if response.status_code == 200 and result.get('ok'):
+            print(f"✅ Notificación enviada exitosamente")
+            return result
+        else:
+            print(f"❌ Error en respuesta de Telegram:")
+            print(f"   Status Code: {response.status_code}")
+            print(f"   Respuesta: {result}")
+            return None
+
+    except requests.exceptions.Timeout:
+        print(f"❌ Timeout al enviar notificación a Telegram")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error de red al enviar notificación Telegram: {e}")
+        return None
     except Exception as e:
-        print(f"Error al enviar notificación Telegram: {e}")
+        print(f"❌ Error inesperado al enviar notificación Telegram: {e}")
         return None
 
 def check_emails():
@@ -187,8 +211,8 @@ def check_emails():
             if last_id and num_id <= last_id:
                 continue
 
-            # Obtener email
-            status, msg_data = mail.fetch(email_id, '(RFC822)')
+            # Obtener email sin marcarlo como leído usando BODY.PEEK
+            status, msg_data = mail.fetch(email_id, '(BODY.PEEK[])')
 
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
