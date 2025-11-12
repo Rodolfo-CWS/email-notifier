@@ -211,8 +211,8 @@ def check_emails():
             if last_id and num_id <= last_id:
                 continue
 
-            # Obtener email
-            status, msg_data = mail.fetch(email_id, '(RFC822)')
+            # Obtener email sin marcarlo como leído usando BODY.PEEK
+            status, msg_data = mail.fetch(email_id, '(BODY.PEEK[])')
 
             for response_part in msg_data:
                 if isinstance(response_part, tuple):
