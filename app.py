@@ -626,6 +626,19 @@ def telegram_webhook():
                 answer_callback_query(callback_id, "📋 Mostrando detalles")
                 email_data = tracking.get(email_id, {})
 
+                print(f"🔍 DEBUG - Ver detalles para email_id: {email_id}")
+                print(f"🔍 DEBUG - Tracking keys: {list(tracking.keys())}")
+                print(f"🔍 DEBUG - Email data encontrado: {bool(email_data)}")
+                print(f"🔍 DEBUG - Email data: {email_data}")
+
+                # Verificar si el email existe en tracking
+                if not email_data or 'sender_email' not in email_data:
+                    print(f"⚠️ Email {email_id} no encontrado en tracking o incompleto")
+                    answer_callback_query(callback_id, "❌ Error: información del email no disponible")
+                    error_text = f"{message_text}\n\n❌ <b>Error:</b> No se pudo cargar la información del email.\n\nIntenta hacer clic en el check de emails nuevamente."
+                    edit_telegram_message(chat_id, message_id, error_text, create_main_menu(email_id))
+                    return jsonify({"status": "error", "message": "Email data not found"})
+
                 # Marcar email como leído en el servidor IMAP (primera vez que ve detalles)
                 if not email_data.get("marked_as_read"):
                     mark_email_as_read(email_id)
@@ -806,12 +819,35 @@ def tracking_status():
         tracking = load_tracking()
         reminders = load_reminders()
 
+        print(f"📊 Tracking status requested")
+        print(f"📊 Total emails tracked: {len(tracking)}")
+        print(f"📊 Tracking keys: {list(tracking.keys())}")
+
         return jsonify({
             "status": "success",
             "total_tracked": len(tracking),
             "pending_reminders": len(reminders),
+            "tracking_keys": list(tracking.keys()),
             "tracking": tracking,
             "reminders": reminders
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/debug-tracking/<email_id>')
+def debug_tracking(email_id):
+    """Endpoint de debug para ver un email específico"""
+    try:
+        tracking = load_tracking()
+        email_data = tracking.get(email_id, None)
+
+        return jsonify({
+            "status": "success",
+            "email_id": email_id,
+            "found": email_data is not None,
+            "data": email_data,
+            "all_keys": list(tracking.keys())
         })
 
     except Exception as e:
