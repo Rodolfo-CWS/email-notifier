@@ -20,6 +20,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Archivo para trackear último email procesado
 LAST_EMAIL_FILE = '/tmp/last_email_id.txt'
+TRACKING_FILE = '/tmp/email_tracking.json'
 
 def get_last_processed_id():
     """Obtiene el ID del último email procesado"""
@@ -35,6 +36,41 @@ def save_last_processed_id(email_id):
     """Guarda el ID del último email procesado"""
     with open(LAST_EMAIL_FILE, 'w') as f:
         f.write(str(email_id))
+
+def save_email_to_tracking(email_id, sender, subject, body, email_date):
+    """Guarda información completa del email en el tracking"""
+    try:
+        # Cargar tracking existente
+        if os.path.exists(TRACKING_FILE):
+            with open(TRACKING_FILE, 'r') as f:
+                tracking = json.load(f)
+        else:
+            tracking = {}
+
+        # Extraer email del remitente (formato: "Nombre <email@ejemplo.com>")
+        sender_email = sender
+        if '<' in sender and '>' in sender:
+            sender_email = sender.split('<')[1].split('>')[0].strip()
+
+        # Guardar información completa
+        tracking[str(email_id)] = {
+            "sender": sender,
+            "sender_email": sender_email,
+            "subject": subject,
+            "body_preview": body[:800],  # Primeras 800 caracteres
+            "email_date": email_date,
+            "status": "new",
+            "created_at": datetime.now().isoformat()
+        }
+
+        # Guardar archivo
+        with open(TRACKING_FILE, 'w') as f:
+            json.dump(tracking, f, indent=2)
+
+        print(f"💾 Email {email_id} guardado en tracking")
+
+    except Exception as e:
+        print(f"❌ Error al guardar en tracking: {e}")
 
 def decode_email_subject(subject):
     """Decodifica el asunto del email"""
@@ -257,6 +293,9 @@ def check_emails():
                     # Resumir con GPT
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
+
+                    # Guardar información completa del email en tracking
+                    save_email_to_tracking(num_id, sender, subject, body, msg.get('Date', 'Sin fecha'))
 
                     # Enviar notificación con botones
                     send_telegram_notification(summary, num_id, subject, sender)

@@ -215,6 +215,26 @@ def create_main_menu(email_id):
         ]
     }
 
+def create_details_menu(email_id, sender_email, subject):
+    """Crea el menú de detalles con acciones"""
+    # Crear URL mailto para responder
+    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📤 Compartir", "callback_data": f"share_{email_id}"},
+                {"text": "📧 Responder", "url": mailto_url}
+            ],
+            [
+                {"text": "🤖 Sugerir Acción", "callback_data": f"suggest_{email_id}"}
+            ],
+            [
+                {"text": "⬅️ Volver", "callback_data": f"back_{email_id}"}
+            ]
+        ]
+    }
+
 def calculate_reminder_time(time_option):
     """Calcula la fecha/hora del recordatorio según la opción seleccionada"""
     now = datetime.now()
@@ -234,6 +254,86 @@ def calculate_reminder_time(time_option):
         return now + timedelta(days=7)
 
     return now + timedelta(hours=1)  # Default
+
+def calculate_time_elapsed(created_at):
+    """Calcula el tiempo transcurrido desde una fecha"""
+    try:
+        created = datetime.fromisoformat(created_at)
+        elapsed = datetime.now() - created
+
+        days = elapsed.days
+        hours = int(elapsed.seconds // 3600)
+        minutes = int((elapsed.seconds % 3600) // 60)
+
+        if days > 0:
+            return f"{days}d {hours}h"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
+    except:
+        return "N/A"
+
+def send_telegram_message(chat_id, text, reply_markup=None):
+    """Envía un nuevo mensaje de Telegram"""
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    data = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup)
+
+    response = requests.post(url, data=data, timeout=10)
+    return response.json()
+
+def generate_ai_suggestion(sender, subject, body_preview):
+    """Genera una sugerencia de acción usando IA"""
+    try:
+        from openai import OpenAI
+
+        # Limpiar variables de proxy
+        import os as os_module
+        os_module.environ.pop('http_proxy', None)
+        os_module.environ.pop('https_proxy', None)
+        os_module.environ.pop('HTTP_PROXY', None)
+        os_module.environ.pop('HTTPS_PROXY', None)
+
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
+        prompt = f"""Analiza este email y sugiere una acción concreta y específica.
+
+De: {sender}
+Asunto: {subject}
+Contenido: {body_preview}
+
+Proporciona:
+1. Acción recomendada (clara y específica)
+2. Prioridad (Alta/Media/Baja) con justificación breve
+3. Tiempo estimado para completar
+
+Formato: Sé directo y práctico. Máximo 100 palabras."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un asistente ejecutivo que ayuda a priorizar y responder emails de manera eficiente."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.3
+        )
+
+        suggestion = response.choices[0].message.content.strip()
+        return suggestion
+
+    except Exception as e:
+        print(f"❌ Error al generar sugerencia de IA: {e}")
+        return "No se pudo generar sugerencia. Intenta de nuevo más tarde."
 
 @app.route('/telegram-webhook', methods=['POST'])
 def telegram_webhook():
@@ -352,14 +452,78 @@ def telegram_webhook():
                 answer_callback_query(callback_id, "📋 Mostrando detalles")
                 email_data = tracking.get(email_id, {})
 
-                details = f"{message_text}\n\n📋 <b>Detalles:</b>\n"
-                details += f"• Estado: {email_data.get('status', 'nuevo')}\n"
-                details += f"• Recibido: {email_data.get('created_at', 'N/A')}\n"
+                # Calcular tiempo transcurrido
+                elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
+
+                # Construir detalles mejorados
+                details = f"📋 <b>Detalles del Email</b>\n\n"
+                details += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
+                details += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
+                details += f"📅 <b>Fecha:</b> {email_data.get('email_date', 'N/A')}\n"
+                details += f"⏱️ <b>Hace:</b> {elapsed}\n"
+                details += f"📊 <b>Estado:</b> {email_data.get('status', 'nuevo')}\n"
 
                 if 'reminder_at' in email_data:
-                    details += f"• Recordatorio: {email_data['reminder_at']}\n"
+                    details += f"🔔 <b>Recordatorio:</b> {email_data['reminder_at']}\n"
 
-                edit_telegram_message(chat_id, message_id, details, create_main_menu(email_id))
+                # Vista previa del contenido
+                body_preview = email_data.get('body_preview', '')
+                if body_preview:
+                    preview = body_preview[:300] + "..." if len(body_preview) > 300 else body_preview
+                    details += f"\n📄 <b>Vista previa:</b>\n<i>{preview}</i>"
+
+                # Usar menú de detalles con acciones
+                sender_email = email_data.get('sender_email', 'unknown@example.com')
+                subject = email_data.get('subject', 'Sin asunto')
+                edit_telegram_message(chat_id, message_id, details, create_details_menu(email_id, sender_email, subject))
+
+            # Compartir email
+            elif action == "share":
+                answer_callback_query(callback_id, "📤 Preparando mensaje para compartir...")
+                email_data = tracking.get(email_id, {})
+
+                # Crear mensaje formateado para compartir
+                share_text = f"📧 <b>Email recibido</b>\n\n"
+                share_text += f"<b>De:</b> {email_data.get('sender', 'N/A')}\n"
+                share_text += f"<b>Email:</b> {email_data.get('sender_email', 'N/A')}\n"
+                share_text += f"<b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
+                share_text += f"<b>Fecha:</b> {email_data.get('email_date', 'N/A')}\n\n"
+
+                body_preview = email_data.get('body_preview', '')
+                if body_preview:
+                    share_text += f"<b>Contenido:</b>\n{body_preview}\n"
+
+                share_text += f"\n<i>📱 Puedes reenviar este mensaje desde Telegram</i>"
+
+                # Enviar nuevo mensaje que sea fácil de compartir/reenviar
+                send_telegram_message(chat_id, share_text)
+                answer_callback_query(callback_id, "✅ Mensaje enviado! Puedes reenviarlo desde Telegram")
+
+            # Sugerir acción con IA
+            elif action == "suggest":
+                answer_callback_query(callback_id, "🤖 Analizando email...")
+                email_data = tracking.get(email_id, {})
+
+                # Mostrar mensaje de carga
+                loading_text = f"{message_text}\n\n⏳ <b>Analizando email con IA...</b>"
+                edit_telegram_message(chat_id, message_id, loading_text, None)
+
+                # Generar sugerencia de IA
+                sender = email_data.get('sender', 'Desconocido')
+                subject = email_data.get('subject', 'Sin asunto')
+                body_preview = email_data.get('body_preview', 'Sin contenido')
+
+                suggestion = generate_ai_suggestion(sender, subject, body_preview)
+
+                # Mostrar sugerencia
+                result_text = f"📋 <b>Detalles del Email</b>\n\n"
+                result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
+                result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
+                result_text += f"🤖 <b>Sugerencia de Acción:</b>\n\n"
+                result_text += f"<i>{suggestion}</i>"
+
+                sender_email = email_data.get('sender_email', 'unknown@example.com')
+                edit_telegram_message(chat_id, message_id, result_text, create_details_menu(email_id, sender_email, subject))
 
             return jsonify({"status": "ok"})
 
