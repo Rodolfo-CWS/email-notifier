@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import requests
+import html
 from email_notifier import check_emails, mark_email_as_read
 
 app = Flask(__name__)
@@ -162,8 +163,19 @@ def edit_telegram_message(chat_id, message_id, text, reply_markup=None):
     if reply_markup:
         data["reply_markup"] = json.dumps(reply_markup)
 
+    print(f"🔧 Editando mensaje {message_id} en chat {chat_id}")
+    print(f"🔧 Texto length: {len(text)} caracteres")
+
     response = requests.post(url, data=data, timeout=10)
-    return response.json()
+    result = response.json()
+
+    print(f"🔧 Respuesta de Telegram: {response.status_code}")
+    print(f"🔧 Resultado: {result}")
+
+    if not result.get('ok'):
+        print(f"❌ ERROR al editar mensaje: {result.get('description')}")
+
+    return result
 
 def answer_callback_query(callback_query_id, text):
     """Responde a un callback query (notificación pequeña en Telegram)"""
@@ -474,12 +486,12 @@ def telegram_webhook():
                     ]
                     save_tracking(tracking)
 
-                    # Mostrar sugerencia refinada
+                    # Mostrar sugerencia refinada (con HTML escapado)
                     result_text = f"📋 <b>Detalles del Email</b>\n\n"
-                    result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
-                    result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
+                    result_text += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                    result_text += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n\n"
                     result_text += f"🤖 <b>Sugerencia Refinada:</b>\n\n"
-                    result_text += f"<i>{refined_suggestion}</i>"
+                    result_text += f"<i>{html.escape(refined_suggestion)}</i>"
 
                     sender_email = email_data.get('sender_email', 'unknown@example.com')
                     if last_message_id:
@@ -648,22 +660,22 @@ def telegram_webhook():
                 # Calcular tiempo transcurrido
                 elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
 
-                # Construir detalles mejorados
+                # Construir detalles mejorados con HTML escapado
                 details = f"📋 <b>Detalles del Email</b>\n\n"
-                details += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
-                details += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
-                details += f"📅 <b>Fecha:</b> {email_data.get('email_date', 'N/A')}\n"
-                details += f"⏱️ <b>Hace:</b> {elapsed}\n"
-                details += f"📊 <b>Estado:</b> {email_data.get('status', 'nuevo')}\n"
+                details += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                details += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n"
+                details += f"📅 <b>Fecha:</b> {html.escape(email_data.get('email_date', 'N/A'))}\n"
+                details += f"⏱️ <b>Hace:</b> {html.escape(elapsed)}\n"
+                details += f"📊 <b>Estado:</b> {html.escape(email_data.get('status', 'nuevo'))}\n"
 
                 if 'reminder_at' in email_data:
-                    details += f"🔔 <b>Recordatorio:</b> {email_data['reminder_at']}\n"
+                    details += f"🔔 <b>Recordatorio:</b> {html.escape(email_data['reminder_at'])}\n"
 
                 # Vista previa del contenido
                 body_preview = email_data.get('body_preview', '')
                 if body_preview:
                     preview = body_preview[:300] + "..." if len(body_preview) > 300 else body_preview
-                    details += f"\n📄 <b>Vista previa:</b>\n<i>{preview}</i>"
+                    details += f"\n📄 <b>Vista previa:</b>\n<i>{html.escape(preview)}</i>"
 
                 # Usar menú de detalles con acciones
                 sender_email = email_data.get('sender_email', 'unknown@example.com')
@@ -680,16 +692,16 @@ def telegram_webhook():
                     mark_email_as_read(email_id)
                     tracking[email_id]["marked_as_read"] = True
 
-                # Crear mensaje formateado para compartir
+                # Crear mensaje formateado para compartir (con HTML escapado)
                 share_text = f"📧 <b>Email recibido</b>\n\n"
-                share_text += f"<b>De:</b> {email_data.get('sender', 'N/A')}\n"
-                share_text += f"<b>Email:</b> {email_data.get('sender_email', 'N/A')}\n"
-                share_text += f"<b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
-                share_text += f"<b>Fecha:</b> {email_data.get('email_date', 'N/A')}\n\n"
+                share_text += f"<b>De:</b> {html.escape(email_data.get('sender', 'N/A'))}\n"
+                share_text += f"<b>Email:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                share_text += f"<b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n"
+                share_text += f"<b>Fecha:</b> {html.escape(email_data.get('email_date', 'N/A'))}\n\n"
 
                 body_preview = email_data.get('body_preview', '')
                 if body_preview:
-                    share_text += f"<b>Contenido:</b>\n{body_preview}\n"
+                    share_text += f"<b>Contenido:</b>\n{html.escape(body_preview)}\n"
 
                 share_text += f"\n<i>📱 Puedes reenviar este mensaje desde Telegram</i>"
 
@@ -704,9 +716,9 @@ def telegram_webhook():
                 # Mostrar mensaje con menú post-acción (incluye botón Recuérdame)
                 elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
                 status_text = f"📋 <b>Detalles del Email</b>\n\n"
-                status_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
-                status_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
-                status_text += f"⏱️ <b>Hace:</b> {elapsed}\n"
+                status_text += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                status_text += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n"
+                status_text += f"⏱️ <b>Hace:</b> {html.escape(elapsed)}\n"
                 status_text += f"\n✅ <b>Mensaje compartido</b>"
 
                 sender_email = email_data.get('sender_email', 'unknown@example.com')
@@ -738,10 +750,10 @@ def telegram_webhook():
 
                 # Mostrar sugerencia con menú especial (incluye botón Refinar)
                 result_text = f"📋 <b>Detalles del Email</b>\n\n"
-                result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
-                result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
+                result_text += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                result_text += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n\n"
                 result_text += f"🤖 <b>Sugerencia de Acción:</b>\n\n"
-                result_text += f"<i>{suggestion}</i>"
+                result_text += f"<i>{html.escape(suggestion)}</i>"
 
                 sender_email = email_data.get('sender_email', 'unknown@example.com')
                 edit_telegram_message(chat_id, message_id, result_text, create_suggestion_menu(email_id, sender_email, subject))
