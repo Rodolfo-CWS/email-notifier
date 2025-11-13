@@ -72,6 +72,26 @@ def save_email_to_tracking(email_id, sender, subject, body, email_date):
     except Exception as e:
         print(f"❌ Error al guardar en tracking: {e}")
 
+def mark_email_as_read(email_id):
+    """Marca un email como leído en el servidor IMAP"""
+    try:
+        print(f"📖 Marcando email {email_id} como leído...")
+
+        # Conectar a IMAP
+        mail = imaplib.IMAP4(IMAP_SERVER, IMAP_PORT)
+        mail.login(EMAIL_USER, EMAIL_PASS)
+        mail.select('INBOX')
+
+        # Marcar como leído usando el flag \Seen
+        mail.store(str(email_id).encode(), '+FLAGS', '\\Seen')
+
+        mail.logout()
+        print(f"✅ Email {email_id} marcado como leído")
+
+    except Exception as e:
+        print(f"⚠️ No se pudo marcar email {email_id} como leído: {e}")
+        # No falla la operación si no se puede marcar como leído
+
 def decode_email_subject(subject):
     """Decodifica el asunto del email"""
     if subject is None:
@@ -185,15 +205,11 @@ def send_telegram_notification(message, email_id, subject, sender):
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-        # Crear botones inline
+        # Crear botones inline - Menú simplificado
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "⏰ Marcar Pendiente", "callback_data": f"pending_{email_id}"},
-                    {"text": "✅ Ya Revisado", "callback_data": f"done_{email_id}"}
-                ],
-                [
-                    {"text": "🔥 Urgente", "callback_data": f"urgent_{email_id}"},
+                    {"text": "❌ Descartar", "callback_data": f"done_{email_id}"},
                     {"text": "📋 Ver Detalles", "callback_data": f"details_{email_id}"}
                 ]
             ]

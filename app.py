@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import requests
-from email_notifier import check_emails
+from email_notifier import check_emails, mark_email_as_read
 
 app = Flask(__name__)
 
@@ -604,6 +604,12 @@ def telegram_webhook():
                 answer_callback_query(callback_id, "✅ Marcado como revisado")
                 tracking[email_id]["status"] = "done"
                 tracking[email_id]["completed_at"] = datetime.now().isoformat()
+
+                # Marcar email como leído en el servidor IMAP (solo si no se ha marcado antes)
+                if not tracking[email_id].get("marked_as_read"):
+                    mark_email_as_read(email_id)
+                    tracking[email_id]["marked_as_read"] = True
+
                 save_tracking(tracking)
 
                 # Remover recordatorio si existe
@@ -619,6 +625,12 @@ def telegram_webhook():
             elif action == "details":
                 answer_callback_query(callback_id, "📋 Mostrando detalles")
                 email_data = tracking.get(email_id, {})
+
+                # Marcar email como leído en el servidor IMAP (primera vez que ve detalles)
+                if not email_data.get("marked_as_read"):
+                    mark_email_as_read(email_id)
+                    tracking[email_id]["marked_as_read"] = True
+                    save_tracking(tracking)
 
                 # Calcular tiempo transcurrido
                 elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
@@ -649,6 +661,11 @@ def telegram_webhook():
             elif action == "share":
                 answer_callback_query(callback_id, "📤 Preparando mensaje para compartir...")
                 email_data = tracking.get(email_id, {})
+
+                # Marcar email como leído en el servidor IMAP (usuario está interactuando con él)
+                if not email_data.get("marked_as_read"):
+                    mark_email_as_read(email_id)
+                    tracking[email_id]["marked_as_read"] = True
 
                 # Crear mensaje formateado para compartir
                 share_text = f"📧 <b>Email recibido</b>\n\n"
