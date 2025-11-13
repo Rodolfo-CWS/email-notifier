@@ -254,6 +254,29 @@ def create_post_action_menu(email_id, sender_email, subject):
         ]
     }
 
+def create_suggestion_menu(email_id, sender_email, subject):
+    """Crea el menú para cuando se muestra una sugerencia de IA"""
+    # Crear URL mailto para responder
+    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📤 Compartir", "callback_data": f"share_{email_id}"},
+                {"text": "📧 Responder", "url": mailto_url}
+            ],
+            [
+                {"text": "🔄 Refinar Sugerencia", "callback_data": f"refine_{email_id}"}
+            ],
+            [
+                {"text": "🔔 Recuérdame en", "callback_data": f"remind_setup_{email_id}"}
+            ],
+            [
+                {"text": "⬅️ Volver", "callback_data": f"back_{email_id}"}
+            ]
+        ]
+    }
+
 def calculate_reminder_time(time_option):
     """Calcula la fecha/hora del recordatorio según la opción seleccionada"""
     now = datetime.now()
@@ -354,12 +377,118 @@ Formato: Sé directo y práctico. Máximo 100 palabras."""
         print(f"❌ Error al generar sugerencia de IA: {e}")
         return "No se pudo generar sugerencia. Intenta de nuevo más tarde."
 
+def refine_ai_suggestion(sender, subject, body_preview, original_suggestion, user_feedback):
+    """Refina una sugerencia de IA basándose en el feedback del usuario"""
+    try:
+        from openai import OpenAI
+
+        # Limpiar variables de proxy
+        import os as os_module
+        os_module.environ.pop('http_proxy', None)
+        os_module.environ.pop('https_proxy', None)
+        os_module.environ.pop('HTTP_PROXY', None)
+        os_module.environ.pop('HTTPS_PROXY', None)
+
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
+        prompt = f"""Refina tu sugerencia anterior considerando el feedback del usuario.
+
+CONTEXTO ORIGINAL:
+De: {sender}
+Asunto: {subject}
+Contenido: {body_preview}
+
+TU SUGERENCIA ANTERIOR:
+{original_suggestion}
+
+FEEDBACK DEL USUARIO:
+{user_feedback}
+
+Genera una nueva sugerencia incorporando los ajustes solicitados. Mantén el mismo formato:
+1. Acción recomendada (clara y específica)
+2. Prioridad con justificación
+3. Tiempo estimado
+
+Máximo 100 palabras."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un asistente ejecutivo que ayuda a priorizar y responder emails. Adaptas tus sugerencias según el feedback del usuario."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.3
+        )
+
+        refined_suggestion = response.choices[0].message.content.strip()
+        return refined_suggestion
+
+    except Exception as e:
+        print(f"❌ Error al refinar sugerencia: {e}")
+        return "No se pudo refinar la sugerencia. Intenta de nuevo."
+
 @app.route('/telegram-webhook', methods=['POST'])
 def telegram_webhook():
-    """Webhook para recibir callbacks de Telegram"""
+    """Webhook para recibir callbacks de Telegram y mensajes de texto"""
     try:
         data = request.json
         print(f"📥 Webhook recibido: {json.dumps(data, indent=2)}")
+
+        # Manejar mensajes de texto (para refinamiento de sugerencias)
+        if 'message' in data and 'text' in data['message']:
+            message = data['message']
+            chat_id = message['chat']['id']
+            user_feedback = message['text']
+
+            # Buscar emails en estado "waiting_refinement"
+            tracking = load_tracking()
+
+            for email_id, email_data in tracking.items():
+                if email_data.get('status') == 'waiting_refinement':
+                    print(f"🔄 Procesando refinamiento para email {email_id}")
+
+                    # Obtener información necesaria
+                    sender = email_data.get('sender', 'Desconocido')
+                    subject = email_data.get('subject', 'Sin asunto')
+                    body_preview = email_data.get('body_preview', 'Sin contenido')
+                    original_suggestion = email_data.get('ai_suggestion', '')
+                    last_message_id = email_data.get('last_message_id')
+
+                    # Enviar mensaje de carga
+                    if last_message_id:
+                        loading_text = "🔄 <b>Refinando sugerencia...</b>"
+                        edit_telegram_message(chat_id, last_message_id, loading_text, None)
+
+                    # Refinar sugerencia con IA
+                    refined_suggestion = refine_ai_suggestion(sender, subject, body_preview, original_suggestion, user_feedback)
+
+                    # Actualizar tracking
+                    tracking[email_id]["status"] = "suggested"
+                    tracking[email_id]["ai_suggestion"] = refined_suggestion
+                    tracking[email_id]["refinement_history"] = tracking[email_id].get('refinement_history', []) + [
+                        {
+                            "feedback": user_feedback,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    ]
+                    save_tracking(tracking)
+
+                    # Mostrar sugerencia refinada
+                    result_text = f"📋 <b>Detalles del Email</b>\n\n"
+                    result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
+                    result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
+                    result_text += f"🤖 <b>Sugerencia Refinada:</b>\n\n"
+                    result_text += f"<i>{refined_suggestion}</i>"
+
+                    sender_email = email_data.get('sender_email', 'unknown@example.com')
+                    if last_message_id:
+                        edit_telegram_message(chat_id, last_message_id, result_text, create_suggestion_menu(email_id, sender_email, subject))
+
+                    # Solo procesar el primer email en waiting_refinement
+                    break
+
+            return jsonify({"status": "ok"})
 
         # Manejar callback queries (clicks en botones)
         if 'callback_query' in data:
@@ -574,9 +703,10 @@ def telegram_webhook():
                 tracking[email_id]["status"] = "suggested"
                 tracking[email_id]["ai_suggestion"] = suggestion
                 tracking[email_id]["suggested_at"] = datetime.now().isoformat()
+                tracking[email_id]["last_message_id"] = message_id  # Para el refinamiento
                 save_tracking(tracking)
 
-                # Mostrar sugerencia con menú post-acción (incluye botón Recuérdame)
+                # Mostrar sugerencia con menú especial (incluye botón Refinar)
                 result_text = f"📋 <b>Detalles del Email</b>\n\n"
                 result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
                 result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
@@ -584,7 +714,23 @@ def telegram_webhook():
                 result_text += f"<i>{suggestion}</i>"
 
                 sender_email = email_data.get('sender_email', 'unknown@example.com')
-                edit_telegram_message(chat_id, message_id, result_text, create_post_action_menu(email_id, sender_email, subject))
+                edit_telegram_message(chat_id, message_id, result_text, create_suggestion_menu(email_id, sender_email, subject))
+
+            # Refinar sugerencia con feedback del usuario
+            elif action == "refine":
+                answer_callback_query(callback_id, "💬 Escribe tus ajustes")
+                email_data = tracking.get(email_id, {})
+
+                # Cambiar estado a esperando refinamiento
+                tracking[email_id]["status"] = "waiting_refinement"
+                tracking[email_id]["last_message_id"] = message_id
+                save_tracking(tracking)
+
+                # Mostrar instrucciones
+                instruction_text = f"{message_text}\n\n💬 <b>Responde a este mensaje</b> con tus ajustes.\n\n"
+                instruction_text += f"<i>Ejemplo: \"Considera mejor 6 semanas y añade que estamos dispuestos a negociar\"</i>"
+
+                edit_telegram_message(chat_id, message_id, instruction_text, None)
 
             return jsonify({"status": "ok"})
 
