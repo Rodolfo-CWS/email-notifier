@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import requests
 from openai import OpenAI
 import time
+import json
 
 # Configuración desde variables de entorno
 IMAP_SERVER = os.getenv('IMAP_SERVER', 'mail.cwscompany.com')
@@ -138,8 +139,8 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         print(f"Error al resumir email: {e}")
         return f"{sender}: {subject}"
 
-def send_telegram_notification(message):
-    """Envía notificación por Telegram"""
+def send_telegram_notification(message, email_id, subject, sender):
+    """Envía notificación por Telegram con botones inline"""
     try:
         # Validar variables de entorno
         if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -147,10 +148,26 @@ def send_telegram_notification(message):
             return None
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+        # Crear botones inline
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "⏰ Marcar Pendiente", "callback_data": f"pending_{email_id}"},
+                    {"text": "✅ Ya Revisado", "callback_data": f"done_{email_id}"}
+                ],
+                [
+                    {"text": "🔥 Urgente", "callback_data": f"urgent_{email_id}"},
+                    {"text": "📋 Ver Detalles", "callback_data": f"details_{email_id}"}
+                ]
+            ]
+        }
+
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": f"📧 {message}",
-            "parse_mode": "HTML"
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard)
         }
 
         print(f"📤 Enviando notificación a Telegram...")
@@ -241,8 +258,8 @@ def check_emails():
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
 
-                    # Enviar notificación
-                    send_telegram_notification(summary)
+                    # Enviar notificación con botones
+                    send_telegram_notification(summary, num_id, subject, sender)
 
                     # Guardar último ID procesado
                     save_last_processed_id(num_id)

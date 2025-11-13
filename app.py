@@ -1,8 +1,15 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import os
+import json
+from datetime import datetime, timedelta
+import requests
 from email_notifier import check_emails
 
 app = Flask(__name__)
+
+# Archivo para tracking de emails
+TRACKING_FILE = '/tmp/email_tracking.json'
+REMINDERS_FILE = '/tmp/email_reminders.json'
 
 @app.route('/')
 def home():
@@ -105,6 +112,322 @@ def test_telegram():
             "status": "error",
             "message": str(e)
         }), 500
+
+# ============================================
+# Sistema de Tracking y Recordatorios
+# ============================================
+
+def load_tracking():
+    """Carga el archivo de tracking"""
+    try:
+        if os.path.exists(TRACKING_FILE):
+            with open(TRACKING_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
+def save_tracking(data):
+    """Guarda el archivo de tracking"""
+    with open(TRACKING_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def load_reminders():
+    """Carga los recordatorios programados"""
+    try:
+        if os.path.exists(REMINDERS_FILE):
+            with open(REMINDERS_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
+def save_reminders(data):
+    """Guarda los recordatorios"""
+    with open(REMINDERS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def edit_telegram_message(chat_id, message_id, text, reply_markup=None):
+    """Edita un mensaje de Telegram"""
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+
+    data = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup)
+
+    response = requests.post(url, data=data, timeout=10)
+    return response.json()
+
+def answer_callback_query(callback_query_id, text):
+    """Responde a un callback query (notificación pequeña en Telegram)"""
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+
+    data = {
+        "callback_query_id": callback_query_id,
+        "text": text,
+        "show_alert": False
+    }
+
+    requests.post(url, data=data, timeout=10)
+
+def create_time_menu(email_id):
+    """Crea el menú de selección de tiempo para recordatorios"""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "⏰ 15 minutos", "callback_data": f"remind_{email_id}_15m"},
+                {"text": "⏰ 1 hora", "callback_data": f"remind_{email_id}_1h"}
+            ],
+            [
+                {"text": "⏰ 3 horas", "callback_data": f"remind_{email_id}_3h"},
+                {"text": "🌅 Mañana 9 AM", "callback_data": f"remind_{email_id}_tomorrow"}
+            ],
+            [
+                {"text": "📅 En 2 días", "callback_data": f"remind_{email_id}_2days"},
+                {"text": "📅 Esta semana", "callback_data": f"remind_{email_id}_week"}
+            ],
+            [
+                {"text": "⬅️ Volver", "callback_data": f"back_{email_id}"}
+            ]
+        ]
+    }
+
+def create_main_menu(email_id):
+    """Crea el menú principal de botones"""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "⏰ Marcar Pendiente", "callback_data": f"pending_{email_id}"},
+                {"text": "✅ Ya Revisado", "callback_data": f"done_{email_id}"}
+            ],
+            [
+                {"text": "🔥 Urgente", "callback_data": f"urgent_{email_id}"},
+                {"text": "📋 Ver Detalles", "callback_data": f"details_{email_id}"}
+            ]
+        ]
+    }
+
+def calculate_reminder_time(time_option):
+    """Calcula la fecha/hora del recordatorio según la opción seleccionada"""
+    now = datetime.now()
+
+    if time_option == "15m":
+        return now + timedelta(minutes=15)
+    elif time_option == "1h":
+        return now + timedelta(hours=1)
+    elif time_option == "3h":
+        return now + timedelta(hours=3)
+    elif time_option == "tomorrow":
+        tomorrow = now + timedelta(days=1)
+        return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
+    elif time_option == "2days":
+        return now + timedelta(days=2)
+    elif time_option == "week":
+        return now + timedelta(days=7)
+
+    return now + timedelta(hours=1)  # Default
+
+@app.route('/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    """Webhook para recibir callbacks de Telegram"""
+    try:
+        data = request.json
+        print(f"📥 Webhook recibido: {json.dumps(data, indent=2)}")
+
+        # Manejar callback queries (clicks en botones)
+        if 'callback_query' in data:
+            callback_query = data['callback_query']
+            callback_data = callback_query['data']
+            callback_id = callback_query['id']
+            message = callback_query['message']
+            chat_id = message['chat']['id']
+            message_id = message['message_id']
+            message_text = message['text']
+
+            print(f"🔘 Callback recibido: {callback_data}")
+
+            # Parsear callback_data
+            parts = callback_data.split('_')
+            action = parts[0]
+            email_id = parts[1] if len(parts) > 1 else None
+
+            tracking = load_tracking()
+
+            # Inicializar tracking para este email si no existe
+            if email_id and email_id not in tracking:
+                tracking[email_id] = {
+                    "message_text": message_text,
+                    "status": "new",
+                    "created_at": datetime.now().isoformat()
+                }
+
+            # Manejar acción "pending" - Mostrar menú de tiempo
+            if action == "pending":
+                answer_callback_query(callback_id, "⏰ Selecciona cuándo quieres el recordatorio")
+
+                # Editar mensaje para mostrar opciones de tiempo
+                new_text = f"{message_text}\n\n⏰ <b>¿Cuándo quieres que te recuerde?</b>"
+                edit_telegram_message(chat_id, message_id, new_text, create_time_menu(email_id))
+
+                tracking[email_id]["status"] = "pending_time_selection"
+                save_tracking(tracking)
+
+            # Manejar selección de tiempo de recordatorio
+            elif action == "remind":
+                time_option = parts[2] if len(parts) > 2 else "1h"
+                reminder_time = calculate_reminder_time(time_option)
+
+                # Guardar recordatorio
+                reminders = load_reminders()
+                reminders[email_id] = {
+                    "message_text": message_text,
+                    "remind_at": reminder_time.isoformat(),
+                    "chat_id": chat_id,
+                    "created_at": datetime.now().isoformat()
+                }
+                save_reminders(reminders)
+
+                tracking[email_id]["status"] = "pending"
+                tracking[email_id]["reminder_at"] = reminder_time.isoformat()
+                save_tracking(tracking)
+
+                # Formatear tiempo para mostrar
+                time_labels = {
+                    "15m": "15 minutos",
+                    "1h": "1 hora",
+                    "3h": "3 horas",
+                    "tomorrow": "mañana a las 9 AM",
+                    "2days": "2 días",
+                    "week": "1 semana"
+                }
+                time_label = time_labels.get(time_option, time_option)
+
+                answer_callback_query(callback_id, f"✅ Recordatorio programado para {time_label}")
+
+                # Actualizar mensaje
+                new_text = f"{message_text}\n\n⏰ <b>Pendiente</b> - Recordatorio en {time_label}"
+                edit_telegram_message(chat_id, message_id, new_text, create_main_menu(email_id))
+
+            # Volver al menú principal
+            elif action == "back":
+                answer_callback_query(callback_id, "Volviendo al menú principal")
+                edit_telegram_message(chat_id, message_id, message_text.split('\n\n')[0], create_main_menu(email_id))
+
+            # Marcar como revisado
+            elif action == "done":
+                answer_callback_query(callback_id, "✅ Marcado como revisado")
+                tracking[email_id]["status"] = "done"
+                tracking[email_id]["completed_at"] = datetime.now().isoformat()
+                save_tracking(tracking)
+
+                # Remover recordatorio si existe
+                reminders = load_reminders()
+                if email_id in reminders:
+                    del reminders[email_id]
+                    save_reminders(reminders)
+
+                new_text = f"{message_text}\n\n✅ <b>Revisado</b>"
+                edit_telegram_message(chat_id, message_id, new_text, None)
+
+            # Marcar como urgente
+            elif action == "urgent":
+                answer_callback_query(callback_id, "🔥 Marcado como urgente")
+                tracking[email_id]["status"] = "urgent"
+                tracking[email_id]["marked_urgent_at"] = datetime.now().isoformat()
+                save_tracking(tracking)
+
+                new_text = f"🔥 <b>URGENTE</b>\n\n{message_text}"
+                edit_telegram_message(chat_id, message_id, new_text, create_main_menu(email_id))
+
+            # Ver detalles
+            elif action == "details":
+                answer_callback_query(callback_id, "📋 Mostrando detalles")
+                email_data = tracking.get(email_id, {})
+
+                details = f"{message_text}\n\n📋 <b>Detalles:</b>\n"
+                details += f"• Estado: {email_data.get('status', 'nuevo')}\n"
+                details += f"• Recibido: {email_data.get('created_at', 'N/A')}\n"
+
+                if 'reminder_at' in email_data:
+                    details += f"• Recordatorio: {email_data['reminder_at']}\n"
+
+                edit_telegram_message(chat_id, message_id, details, create_main_menu(email_id))
+
+            return jsonify({"status": "ok"})
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        print(f"❌ Error en webhook: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/check-reminders')
+def check_reminders():
+    """Endpoint para verificar y enviar recordatorios pendientes"""
+    try:
+        reminders = load_reminders()
+        now = datetime.now()
+        sent_count = 0
+
+        TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+
+        for email_id, reminder in list(reminders.items()):
+            remind_at = datetime.fromisoformat(reminder['remind_at'])
+
+            if now >= remind_at:
+                # Enviar recordatorio
+                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                data = {
+                    "chat_id": reminder['chat_id'],
+                    "text": f"🔔 <b>Recordatorio</b>\n\n{reminder['message_text']}",
+                    "parse_mode": "HTML",
+                    "reply_markup": json.dumps(create_main_menu(email_id))
+                }
+
+                response = requests.post(url, data=data, timeout=10)
+                if response.status_code == 200:
+                    sent_count += 1
+                    # Remover recordatorio enviado
+                    del reminders[email_id]
+
+        save_reminders(reminders)
+
+        return jsonify({
+            "status": "success",
+            "reminders_sent": sent_count,
+            "pending_reminders": len(reminders)
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/tracking-status')
+def tracking_status():
+    """Endpoint para ver el estado del tracking"""
+    try:
+        tracking = load_tracking()
+        reminders = load_reminders()
+
+        return jsonify({
+            "status": "success",
+            "total_tracked": len(tracking),
+            "pending_reminders": len(reminders),
+            "tracking": tracking,
+            "reminders": reminders
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
