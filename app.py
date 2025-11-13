@@ -201,15 +201,11 @@ def create_time_menu(email_id):
     }
 
 def create_main_menu(email_id):
-    """Crea el menú principal de botones"""
+    """Crea el menú principal de botones - Simple y limpio"""
     return {
         "inline_keyboard": [
             [
-                {"text": "⏰ Marcar Pendiente", "callback_data": f"pending_{email_id}"},
-                {"text": "✅ Ya Revisado", "callback_data": f"done_{email_id}"}
-            ],
-            [
-                {"text": "🔥 Urgente", "callback_data": f"urgent_{email_id}"},
+                {"text": "❌ Descartar", "callback_data": f"done_{email_id}"},
                 {"text": "📋 Ver Detalles", "callback_data": f"details_{email_id}"}
             ]
         ]
@@ -227,7 +223,30 @@ def create_details_menu(email_id, sender_email, subject):
                 {"text": "📧 Responder", "url": mailto_url}
             ],
             [
-                {"text": "🤖 Sugerir Acción", "callback_data": f"suggest_{email_id}"}
+                {"text": "🤖 Sugerencia", "callback_data": f"suggest_{email_id}"}
+            ],
+            [
+                {"text": "⬅️ Volver", "callback_data": f"back_{email_id}"}
+            ]
+        ]
+    }
+
+def create_post_action_menu(email_id, sender_email, subject):
+    """Crea el menú después de realizar una acción (Compartir/Responder/Sugerencia)"""
+    # Crear URL mailto para responder
+    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📤 Compartir", "callback_data": f"share_{email_id}"},
+                {"text": "📧 Responder", "url": mailto_url}
+            ],
+            [
+                {"text": "🤖 Sugerencia", "callback_data": f"suggest_{email_id}"}
+            ],
+            [
+                {"text": "🔔 Recuérdame en", "callback_data": f"remind_setup_{email_id}"}
             ],
             [
                 {"text": "⬅️ Volver", "callback_data": f"back_{email_id}"}
@@ -369,8 +388,10 @@ def telegram_webhook():
                     "created_at": datetime.now().isoformat()
                 }
 
-            # Manejar acción "pending" - Mostrar menú de tiempo
-            if action == "pending":
+            # Manejar "remind_setup" - Mostrar menú de tiempo
+            if action == "remind" and len(parts) > 2 and parts[1] == "setup":
+                # Este es "remind_setup_123"
+                email_id = parts[2]
                 answer_callback_query(callback_id, "⏰ Selecciona cuándo quieres el recordatorio")
 
                 # Editar mensaje para mostrar opciones de tiempo
@@ -380,22 +401,25 @@ def telegram_webhook():
                 tracking[email_id]["status"] = "pending_time_selection"
                 save_tracking(tracking)
 
-            # Manejar selección de tiempo de recordatorio
-            elif action == "remind":
-                time_option = parts[2] if len(parts) > 2 else "1h"
+            # Manejar selección de tiempo de recordatorio (remind_123_15m)
+            elif action == "remind" and len(parts) > 2 and parts[1] != "setup":
+                time_option = parts[2]
                 reminder_time = calculate_reminder_time(time_option)
+
+                # Obtener texto original del mensaje (sin el texto de "¿Cuándo quieres...")
+                original_text = message_text.split('\n\n⏰')[0]
 
                 # Guardar recordatorio
                 reminders = load_reminders()
                 reminders[email_id] = {
-                    "message_text": message_text,
+                    "message_text": original_text,
                     "remind_at": reminder_time.isoformat(),
                     "chat_id": chat_id,
                     "created_at": datetime.now().isoformat()
                 }
                 save_reminders(reminders)
 
-                tracking[email_id]["status"] = "pending"
+                tracking[email_id]["status"] = "reminder_set"
                 tracking[email_id]["reminder_at"] = reminder_time.isoformat()
                 save_tracking(tracking)
 
@@ -410,16 +434,41 @@ def telegram_webhook():
                 }
                 time_label = time_labels.get(time_option, time_option)
 
-                answer_callback_query(callback_id, f"✅ Recordatorio programado para {time_label}")
+                answer_callback_query(callback_id, f"✅ Recordatorio programado")
 
-                # Actualizar mensaje
-                new_text = f"{message_text}\n\n⏰ <b>Pendiente</b> - Recordatorio en {time_label}"
+                # Actualizar mensaje con estado
+                new_text = f"{original_text}\n\n🔔 <b>Recordatorio programado</b> en {time_label}"
                 edit_telegram_message(chat_id, message_id, new_text, create_main_menu(email_id))
 
             # Volver al menú principal
             elif action == "back":
                 answer_callback_query(callback_id, "Volviendo al menú principal")
-                edit_telegram_message(chat_id, message_id, message_text.split('\n\n')[0], create_main_menu(email_id))
+                email_data = tracking.get(email_id, {})
+
+                # Restaurar mensaje original con resumen del email
+                original_summary = email_data.get('message_text', message_text.split('\n\n')[0])
+
+                # Si hay recordatorio activo, mostrarlo
+                if 'reminder_at' in email_data:
+                    time_label = "programado"  # Por defecto
+                    try:
+                        remind_time = datetime.fromisoformat(email_data['reminder_at'])
+                        now = datetime.now()
+                        diff = remind_time - now
+                        minutes = int(diff.total_seconds() // 60)
+                        if minutes < 60:
+                            time_label = f"{minutes} minutos"
+                        else:
+                            hours = minutes // 60
+                            time_label = f"{hours}h"
+                    except:
+                        pass
+
+                    original_text = f"📧 {original_summary}\n\n🔔 <b>Recordatorio programado</b> en {time_label}"
+                else:
+                    original_text = f"📧 {original_summary}"
+
+                edit_telegram_message(chat_id, message_id, original_text, create_main_menu(email_id))
 
             # Marcar como revisado
             elif action == "done":
@@ -436,16 +485,6 @@ def telegram_webhook():
 
                 new_text = f"{message_text}\n\n✅ <b>Revisado</b>"
                 edit_telegram_message(chat_id, message_id, new_text, None)
-
-            # Marcar como urgente
-            elif action == "urgent":
-                answer_callback_query(callback_id, "🔥 Marcado como urgente")
-                tracking[email_id]["status"] = "urgent"
-                tracking[email_id]["marked_urgent_at"] = datetime.now().isoformat()
-                save_tracking(tracking)
-
-                new_text = f"🔥 <b>URGENTE</b>\n\n{message_text}"
-                edit_telegram_message(chat_id, message_id, new_text, create_main_menu(email_id))
 
             # Ver detalles
             elif action == "details":
@@ -497,7 +536,23 @@ def telegram_webhook():
 
                 # Enviar nuevo mensaje que sea fácil de compartir/reenviar
                 send_telegram_message(chat_id, share_text)
-                answer_callback_query(callback_id, "✅ Mensaje enviado! Puedes reenviarlo desde Telegram")
+
+                # Actualizar mensaje original con estado "compartido" y menú post-acción
+                tracking[email_id]["status"] = "shared"
+                tracking[email_id]["shared_at"] = datetime.now().isoformat()
+                save_tracking(tracking)
+
+                # Mostrar mensaje con menú post-acción (incluye botón Recuérdame)
+                elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
+                status_text = f"📋 <b>Detalles del Email</b>\n\n"
+                status_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
+                status_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n"
+                status_text += f"⏱️ <b>Hace:</b> {elapsed}\n"
+                status_text += f"\n✅ <b>Mensaje compartido</b>"
+
+                sender_email = email_data.get('sender_email', 'unknown@example.com')
+                subject = email_data.get('subject', 'Sin asunto')
+                edit_telegram_message(chat_id, message_id, status_text, create_post_action_menu(email_id, sender_email, subject))
 
             # Sugerir acción con IA
             elif action == "suggest":
@@ -515,7 +570,13 @@ def telegram_webhook():
 
                 suggestion = generate_ai_suggestion(sender, subject, body_preview)
 
-                # Mostrar sugerencia
+                # Guardar estado
+                tracking[email_id]["status"] = "suggested"
+                tracking[email_id]["ai_suggestion"] = suggestion
+                tracking[email_id]["suggested_at"] = datetime.now().isoformat()
+                save_tracking(tracking)
+
+                # Mostrar sugerencia con menú post-acción (incluye botón Recuérdame)
                 result_text = f"📋 <b>Detalles del Email</b>\n\n"
                 result_text += f"📧 <b>De:</b> {email_data.get('sender_email', 'N/A')}\n"
                 result_text += f"📝 <b>Asunto:</b> {email_data.get('subject', 'N/A')}\n\n"
@@ -523,7 +584,7 @@ def telegram_webhook():
                 result_text += f"<i>{suggestion}</i>"
 
                 sender_email = email_data.get('sender_email', 'unknown@example.com')
-                edit_telegram_message(chat_id, message_id, result_text, create_details_menu(email_id, sender_email, subject))
+                edit_telegram_message(chat_id, message_id, result_text, create_post_action_menu(email_id, sender_email, subject))
 
             return jsonify({"status": "ok"})
 

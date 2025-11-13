@@ -294,8 +294,16 @@ def check_emails():
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
 
-                    # Guardar información completa del email en tracking
+                    # Guardar información completa del email en tracking (incluyendo resumen)
                     save_email_to_tracking(num_id, sender, subject, body, msg.get('Date', 'Sin fecha'))
+
+                    # Actualizar tracking con el resumen generado
+                    if os.path.exists(TRACKING_FILE):
+                        with open(TRACKING_FILE, 'r') as f:
+                            tracking = json.load(f)
+                        tracking[str(num_id)]["message_text"] = summary
+                        with open(TRACKING_FILE, 'w') as f:
+                            json.dump(tracking, f, indent=2)
 
                     # Enviar notificación con botones
                     send_telegram_notification(summary, num_id, subject, sender)
