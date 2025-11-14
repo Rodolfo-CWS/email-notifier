@@ -42,6 +42,31 @@ def migrate_from_tmp():
 # Ejecutar migración al iniciar
 migrate_from_tmp()
 
+# Logging de información de rutas al iniciar
+print("=" * 60)
+print("📁 CONFIGURACIÓN DE RUTAS DE ARCHIVOS")
+print("=" * 60)
+print(f"📂 Working Directory: {os.getcwd()}")
+print(f"📂 Script Directory: {os.path.dirname(os.path.abspath(__file__))}")
+print(f"📂 DATA_DIR: {DATA_DIR}")
+print(f"📂 DATA_DIR (absoluto): {os.path.abspath(DATA_DIR)}")
+print(f"📂 TRACKING_FILE: {TRACKING_FILE}")
+print(f"📂 TRACKING_FILE (absoluto): {os.path.abspath(TRACKING_FILE)}")
+print(f"📂 REMINDERS_FILE: {REMINDERS_FILE}")
+print(f"📂 ¿Existe DATA_DIR?: {os.path.exists(DATA_DIR)}")
+print(f"📂 ¿Existe TRACKING_FILE?: {os.path.exists(TRACKING_FILE)}")
+if os.path.exists(TRACKING_FILE):
+    file_size = os.path.getsize(TRACKING_FILE)
+    print(f"📊 Tamaño de TRACKING_FILE: {file_size} bytes")
+    try:
+        with open(TRACKING_FILE, 'r') as f:
+            tracking = json.load(f)
+        print(f"📊 Emails en tracking al iniciar: {len(tracking)}")
+        print(f"📊 IDs en tracking: {list(tracking.keys())}")
+    except Exception as e:
+        print(f"❌ Error al leer tracking: {e}")
+print("=" * 60)
+
 @app.route('/')
 def home():
     return jsonify({
@@ -153,9 +178,15 @@ def load_tracking():
     try:
         if os.path.exists(TRACKING_FILE):
             with open(TRACKING_FILE, 'r') as f:
-                return json.load(f)
-    except:
-        pass
+                tracking = json.load(f)
+            print(f"📖 Tracking cargado: {len(tracking)} emails")
+            return tracking
+        else:
+            print(f"⚠️ Archivo de tracking no existe: {TRACKING_FILE}")
+    except Exception as e:
+        print(f"❌ Error al cargar tracking: {e}")
+        import traceback
+        traceback.print_exc()
     return {}
 
 def save_tracking(data):

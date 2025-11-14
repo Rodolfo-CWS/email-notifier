@@ -51,6 +51,28 @@ def migrate_from_tmp():
 # Ejecutar migración al iniciar
 migrate_from_tmp()
 
+# Logging de información de rutas
+print("=" * 60)
+print("📁 EMAIL_NOTIFIER - CONFIGURACIÓN DE RUTAS")
+print("=" * 60)
+print(f"📂 Working Directory: {os.getcwd()}")
+print(f"📂 Script Directory: {os.path.dirname(os.path.abspath(__file__))}")
+print(f"📂 DATA_DIR: {DATA_DIR}")
+print(f"📂 DATA_DIR (absoluto): {os.path.abspath(DATA_DIR)}")
+print(f"📂 LAST_EMAIL_FILE: {LAST_EMAIL_FILE}")
+print(f"📂 TRACKING_FILE: {TRACKING_FILE}")
+print(f"📂 ¿Existe DATA_DIR?: {os.path.exists(DATA_DIR)}")
+print(f"📂 ¿Existe TRACKING_FILE?: {os.path.exists(TRACKING_FILE)}")
+if os.path.exists(TRACKING_FILE):
+    try:
+        with open(TRACKING_FILE, 'r') as f:
+            tracking = json.load(f)
+        print(f"📊 Emails en tracking: {len(tracking)}")
+        print(f"📊 IDs: {list(tracking.keys())}")
+    except Exception as e:
+        print(f"❌ Error al leer tracking: {e}")
+print("=" * 60)
+
 def get_last_processed_id():
     """Obtiene el ID del último email procesado"""
     try:
@@ -69,11 +91,26 @@ def save_last_processed_id(email_id):
 def save_email_to_tracking(email_id, sender, subject, body, email_date):
     """Guarda información completa del email en el tracking"""
     try:
+        print(f"📝 Intentando guardar email {email_id} en tracking...")
+        print(f"📂 Ruta del archivo: {TRACKING_FILE}")
+        print(f"📂 Ruta absoluta: {os.path.abspath(TRACKING_FILE)}")
+        print(f"📂 Directorio DATA_DIR: {DATA_DIR}")
+        print(f"📂 ¿Existe directorio?: {os.path.exists(DATA_DIR)}")
+
+        # Verificar y crear directorio si no existe
+        if not os.path.exists(DATA_DIR):
+            print(f"⚠️ Directorio {DATA_DIR} no existe, creándolo...")
+            os.makedirs(DATA_DIR, exist_ok=True)
+            print(f"✅ Directorio creado")
+
         # Cargar tracking existente
         if os.path.exists(TRACKING_FILE):
+            print(f"📖 Leyendo tracking existente de {TRACKING_FILE}")
             with open(TRACKING_FILE, 'r') as f:
                 tracking = json.load(f)
+            print(f"📊 Tracking tiene {len(tracking)} emails")
         else:
+            print(f"📄 Creando nuevo archivo de tracking")
             tracking = {}
 
         # Extraer email del remitente (formato: "Nombre <email@ejemplo.com>")
@@ -92,14 +129,34 @@ def save_email_to_tracking(email_id, sender, subject, body, email_date):
             "created_at": datetime.now().isoformat()
         }
 
+        print(f"📋 Datos a guardar para email {email_id}:")
+        print(f"   - sender_email: {sender_email}")
+        print(f"   - subject: {subject[:50]}...")
+
         # Guardar archivo
         with open(TRACKING_FILE, 'w') as f:
             json.dump(tracking, f, indent=2)
 
-        print(f"💾 Email {email_id} guardado en tracking")
+        # Verificar que se guardó correctamente
+        if os.path.exists(TRACKING_FILE):
+            file_size = os.path.getsize(TRACKING_FILE)
+            print(f"✅ Email {email_id} guardado en tracking (archivo: {file_size} bytes)")
+            print(f"✅ Total de emails en tracking: {len(tracking)}")
+
+            # Verificar que se puede leer de nuevo
+            with open(TRACKING_FILE, 'r') as f:
+                verify = json.load(f)
+                if str(email_id) in verify:
+                    print(f"✅ Verificación: email {email_id} existe en archivo")
+                else:
+                    print(f"❌ ERROR: email {email_id} NO se encuentra en archivo después de guardarlo!")
+        else:
+            print(f"❌ ERROR: Archivo {TRACKING_FILE} no existe después de intentar guardarlo!")
 
     except Exception as e:
         print(f"❌ Error al guardar en tracking: {e}")
+        import traceback
+        traceback.print_exc()
 
 def mark_email_as_read(email_id):
     """Marca un email como leído en el servidor IMAP"""
