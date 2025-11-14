@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 import requests
 import html
+from urllib.parse import quote
 from email_notifier import check_emails, mark_email_as_read
 
 app = Flask(__name__)
@@ -230,8 +231,8 @@ def create_main_menu(email_id):
 
 def create_details_menu(email_id, sender_email, subject):
     """Crea el menú de detalles con acciones"""
-    # Crear URL mailto para responder
-    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+    # Crear URL mailto para responder (codificar subject para evitar caracteres inválidos)
+    mailto_url = f"mailto:{sender_email}?subject={quote('Re: ' + subject)}"
 
     return {
         "inline_keyboard": [
@@ -250,8 +251,8 @@ def create_details_menu(email_id, sender_email, subject):
 
 def create_post_action_menu(email_id, sender_email, subject):
     """Crea el menú después de realizar una acción (Compartir/Responder/Sugerencia)"""
-    # Crear URL mailto para responder
-    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+    # Crear URL mailto para responder (codificar subject para evitar caracteres inválidos)
+    mailto_url = f"mailto:{sender_email}?subject={quote('Re: ' + subject)}"
 
     return {
         "inline_keyboard": [
@@ -273,8 +274,8 @@ def create_post_action_menu(email_id, sender_email, subject):
 
 def create_suggestion_menu(email_id, sender_email, subject):
     """Crea el menú para cuando se muestra una sugerencia de IA"""
-    # Crear URL mailto para responder
-    mailto_url = f"mailto:{sender_email}?subject=Re: {subject}"
+    # Crear URL mailto para responder (codificar subject para evitar caracteres inválidos)
+    mailto_url = f"mailto:{sender_email}?subject={quote('Re: ' + subject)}"
 
     return {
         "inline_keyboard": [
