@@ -18,6 +18,30 @@ os.makedirs(DATA_DIR, exist_ok=True)
 TRACKING_FILE = os.path.join(DATA_DIR, 'email_tracking.json')
 REMINDERS_FILE = os.path.join(DATA_DIR, 'email_reminders.json')
 
+# Migrar archivos de /tmp/ a ./data/ si existen (solo la primera vez)
+def migrate_from_tmp():
+    """Migra archivos de tracking de /tmp/ a ./data/ si existen"""
+    old_tracking = '/tmp/email_tracking.json'
+    old_reminders = '/tmp/email_reminders.json'
+
+    try:
+        # Migrar tracking
+        if os.path.exists(old_tracking) and not os.path.exists(TRACKING_FILE):
+            import shutil
+            shutil.copy2(old_tracking, TRACKING_FILE)
+            print(f"✅ Migrado tracking de {old_tracking} a {TRACKING_FILE}")
+
+        # Migrar reminders
+        if os.path.exists(old_reminders) and not os.path.exists(REMINDERS_FILE):
+            import shutil
+            shutil.copy2(old_reminders, REMINDERS_FILE)
+            print(f"✅ Migrado reminders de {old_reminders} a {REMINDERS_FILE}")
+    except Exception as e:
+        print(f"⚠️ Error en migración (no crítico): {e}")
+
+# Ejecutar migración al iniciar
+migrate_from_tmp()
+
 @app.route('/')
 def home():
     return jsonify({

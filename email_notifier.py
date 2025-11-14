@@ -27,6 +27,30 @@ os.makedirs(DATA_DIR, exist_ok=True)
 LAST_EMAIL_FILE = os.path.join(DATA_DIR, 'last_email_id.txt')
 TRACKING_FILE = os.path.join(DATA_DIR, 'email_tracking.json')
 
+# Migrar archivos de /tmp/ a ./data/ si existen (solo la primera vez)
+def migrate_from_tmp():
+    """Migra archivos de tracking de /tmp/ a ./data/ si existen"""
+    old_last_email = '/tmp/last_email_id.txt'
+    old_tracking = '/tmp/email_tracking.json'
+
+    try:
+        # Migrar last_email_id
+        if os.path.exists(old_last_email) and not os.path.exists(LAST_EMAIL_FILE):
+            import shutil
+            shutil.copy2(old_last_email, LAST_EMAIL_FILE)
+            print(f"✅ Migrado last_email_id de {old_last_email} a {LAST_EMAIL_FILE}")
+
+        # Migrar tracking
+        if os.path.exists(old_tracking) and not os.path.exists(TRACKING_FILE):
+            import shutil
+            shutil.copy2(old_tracking, TRACKING_FILE)
+            print(f"✅ Migrado tracking de {old_tracking} a {TRACKING_FILE}")
+    except Exception as e:
+        print(f"⚠️ Error en migración (no crítico): {e}")
+
+# Ejecutar migración al iniciar
+migrate_from_tmp()
+
 def get_last_processed_id():
     """Obtiene el ID del último email procesado"""
     try:
