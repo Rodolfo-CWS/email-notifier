@@ -8,9 +8,14 @@ from email_notifier import check_emails, mark_email_as_read
 
 app = Flask(__name__)
 
+# Directorio para datos persistentes
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+# Crear directorio si no existe
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # Archivo para tracking de emails
-TRACKING_FILE = '/tmp/email_tracking.json'
-REMINDERS_FILE = '/tmp/email_reminders.json'
+TRACKING_FILE = os.path.join(DATA_DIR, 'email_tracking.json')
+REMINDERS_FILE = os.path.join(DATA_DIR, 'email_reminders.json')
 
 @app.route('/')
 def home():
@@ -635,7 +640,6 @@ def telegram_webhook():
 
             # Ver detalles
             elif action == "details":
-                answer_callback_query(callback_id, "📋 Mostrando detalles")
                 email_data = tracking.get(email_id, {})
 
                 print(f"🔍 DEBUG - Ver detalles para email_id: {email_id}")
@@ -643,44 +647,52 @@ def telegram_webhook():
                 print(f"🔍 DEBUG - Email data encontrado: {bool(email_data)}")
                 print(f"🔍 DEBUG - Email data: {email_data}")
 
-                # Verificar si el email existe en tracking
-                if not email_data or 'sender_email' not in email_data:
+                # Verificar si el email existe en tracking y tiene la información completa
+                if not email_data or not email_data.get('sender_email') or not email_data.get('subject'):
                     print(f"⚠️ Email {email_id} no encontrado en tracking o incompleto")
-                    answer_callback_query(callback_id, "❌ Error: información del email no disponible")
-                    error_text = f"{message_text}\n\n❌ <b>Error:</b> No se pudo cargar la información del email.\n\nIntenta hacer clic en el check de emails nuevamente."
-                    edit_telegram_message(chat_id, message_id, error_text, create_main_menu(email_id))
-                    return jsonify({"status": "error", "message": "Email data not found"})
+                    answer_callback_query(callback_id, "❌ Información no disponible")
 
-                # Marcar email como leído en el servidor IMAP (primera vez que ve detalles)
-                if not email_data.get("marked_as_read"):
-                    mark_email_as_read(email_id)
-                    tracking[email_id]["marked_as_read"] = True
-                    save_tracking(tracking)
+                    error_message = f"{message_text}\n\n"
+                    error_message += "❌ <b>Error:</b> No se pudo cargar la información del email.\n\n"
+                    error_message += "<i>Intenta hacer clic en el check de emails nuevamente.</i>"
 
-                # Calcular tiempo transcurrido
-                elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
+                    # Mantener el menú simple para permitir descartar
+                    edit_telegram_message(chat_id, message_id, error_message, create_main_menu(email_id))
 
-                # Construir detalles mejorados con HTML escapado
-                details = f"📋 <b>Detalles del Email</b>\n\n"
-                details += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
-                details += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n"
-                details += f"📅 <b>Fecha:</b> {html.escape(email_data.get('email_date', 'N/A'))}\n"
-                details += f"⏱️ <b>Hace:</b> {html.escape(elapsed)}\n"
-                details += f"📊 <b>Estado:</b> {html.escape(email_data.get('status', 'nuevo'))}\n"
+                else:
+                    # Tenemos información completa, mostrar detalles
+                    answer_callback_query(callback_id, "📋 Mostrando detalles")
 
-                if 'reminder_at' in email_data:
-                    details += f"🔔 <b>Recordatorio:</b> {html.escape(email_data['reminder_at'])}\n"
+                    # Marcar email como leído en el servidor IMAP (primera vez que ve detalles)
+                    if not email_data.get("marked_as_read"):
+                        mark_email_as_read(email_id)
+                        tracking[email_id]["marked_as_read"] = True
+                        save_tracking(tracking)
 
-                # Vista previa del contenido
-                body_preview = email_data.get('body_preview', '')
-                if body_preview:
-                    preview = body_preview[:300] + "..." if len(body_preview) > 300 else body_preview
-                    details += f"\n📄 <b>Vista previa:</b>\n<i>{html.escape(preview)}</i>"
+                    # Calcular tiempo transcurrido
+                    elapsed = calculate_time_elapsed(email_data.get('created_at', ''))
 
-                # Usar menú de detalles con acciones
-                sender_email = email_data.get('sender_email', 'unknown@example.com')
-                subject = email_data.get('subject', 'Sin asunto')
-                edit_telegram_message(chat_id, message_id, details, create_details_menu(email_id, sender_email, subject))
+                    # Construir detalles mejorados con HTML escapado
+                    details = f"📋 <b>Detalles del Email</b>\n\n"
+                    details += f"📧 <b>De:</b> {html.escape(email_data.get('sender_email', 'N/A'))}\n"
+                    details += f"📝 <b>Asunto:</b> {html.escape(email_data.get('subject', 'N/A'))}\n"
+                    details += f"📅 <b>Fecha:</b> {html.escape(email_data.get('email_date', 'N/A'))}\n"
+                    details += f"⏱️ <b>Hace:</b> {html.escape(elapsed)}\n"
+                    details += f"📊 <b>Estado:</b> {html.escape(email_data.get('status', 'nuevo'))}\n"
+
+                    if 'reminder_at' in email_data:
+                        details += f"🔔 <b>Recordatorio:</b> {html.escape(email_data['reminder_at'])}\n"
+
+                    # Vista previa del contenido
+                    body_preview = email_data.get('body_preview', '')
+                    if body_preview:
+                        preview = body_preview[:300] + "..." if len(body_preview) > 300 else body_preview
+                        details += f"\n📄 <b>Vista previa:</b>\n<i>{html.escape(preview)}</i>"
+
+                    # Usar menú de detalles con acciones
+                    sender_email = email_data.get('sender_email', 'unknown@example.com')
+                    subject = email_data.get('subject', 'Sin asunto')
+                    edit_telegram_message(chat_id, message_id, details, create_details_menu(email_id, sender_email, subject))
 
             # Compartir email
             elif action == "share":

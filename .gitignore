@@ -45,3 +45,7 @@ Thumbs.db
 /tmp/
 *.tmp
 last_email_id.txt
+
+# Data directory (keep structure but ignore content)
+data/*
+!data/.gitkeep

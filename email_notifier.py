@@ -18,9 +18,14 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
+# Directorio para datos persistentes
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+# Crear directorio si no existe
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # Archivo para trackear último email procesado
-LAST_EMAIL_FILE = '/tmp/last_email_id.txt'
-TRACKING_FILE = '/tmp/email_tracking.json'
+LAST_EMAIL_FILE = os.path.join(DATA_DIR, 'last_email_id.txt')
+TRACKING_FILE = os.path.join(DATA_DIR, 'email_tracking.json')
 
 def get_last_processed_id():
     """Obtiene el ID del último email procesado"""
