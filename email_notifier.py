@@ -3,6 +3,7 @@ import email
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 import os
+import json
 from datetime import datetime, timedelta
 import requests
 from openai import OpenAI
@@ -19,6 +20,8 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Archivo para trackear último email procesado
 LAST_EMAIL_FILE = '/tmp/last_email_id.txt'
+# Archivo para almacenar detalles de emails (para el botón "Ver detalles")
+EMAIL_DETAILS_FILE = '/tmp/email_details.json'
 
 def get_last_processed_id():
     """Obtiene el ID del último email procesado"""
@@ -34,6 +37,42 @@ def save_last_processed_id(email_id):
     """Guarda el ID del último email procesado"""
     with open(LAST_EMAIL_FILE, 'w') as f:
         f.write(str(email_id))
+
+def load_email_details():
+    """Carga los detalles de emails almacenados"""
+    try:
+        if os.path.exists(EMAIL_DETAILS_FILE):
+            with open(EMAIL_DETAILS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error al cargar detalles de emails: {e}")
+    return {}
+
+def save_email_details(email_id, details):
+    """Guarda los detalles de un email para acceso posterior"""
+    try:
+        all_details = load_email_details()
+
+        # Limpiar emails antiguos (mantener solo los últimos 100)
+        if len(all_details) > 100:
+            # Ordenar por timestamp y mantener los más recientes
+            sorted_ids = sorted(all_details.keys(),
+                               key=lambda x: all_details[x].get('timestamp', ''),
+                               reverse=True)
+            all_details = {k: all_details[k] for k in sorted_ids[:100]}
+
+        all_details[str(email_id)] = details
+
+        with open(EMAIL_DETAILS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(all_details, f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        print(f"Error al guardar detalles del email: {e}")
+
+def get_email_details(email_id):
+    """Obtiene los detalles de un email específico"""
+    all_details = load_email_details()
+    return all_details.get(str(email_id))
 
 def decode_email_subject(subject):
     """Decodifica el asunto del email"""
@@ -138,8 +177,8 @@ Ejemplo: "Juan de Contabilidad necesita facturas del mes anterior"
         print(f"Error al resumir email: {e}")
         return f"{sender}: {subject}"
 
-def send_telegram_notification(message):
-    """Envía notificación por Telegram"""
+def send_telegram_notification(message, email_id=None):
+    """Envía notificación por Telegram con botón 'Ver detalles'"""
     try:
         # Validar variables de entorno
         if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -147,11 +186,25 @@ def send_telegram_notification(message):
             return None
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+        # Preparar datos del mensaje
         data = {
             "chat_id": TELEGRAM_CHAT_ID,
             "text": f"📧 {message}",
             "parse_mode": "HTML"
         }
+
+        # Agregar botón "Ver detalles" si tenemos email_id
+        if email_id:
+            inline_keyboard = {
+                "inline_keyboard": [[
+                    {
+                        "text": "📋 Ver detalles",
+                        "callback_data": f"details_{email_id}"
+                    }
+                ]]
+            }
+            data["reply_markup"] = json.dumps(inline_keyboard)
 
         print(f"📤 Enviando notificación a Telegram...")
         response = requests.post(url, data=data, timeout=10)
@@ -176,6 +229,139 @@ def send_telegram_notification(message):
     except Exception as e:
         print(f"❌ Error inesperado al enviar notificación Telegram: {e}")
         return None
+
+def handle_callback_query(callback_query):
+    """Maneja los callbacks de los botones de Telegram"""
+    try:
+        callback_id = callback_query.get('id')
+        callback_data = callback_query.get('data', '')
+        message = callback_query.get('message', {})
+        chat_id = message.get('chat', {}).get('id')
+        message_id = message.get('message_id')
+
+        # Verificar que es un callback de detalles
+        if not callback_data.startswith('details_'):
+            return False
+
+        email_id = callback_data.replace('details_', '')
+        details = get_email_details(email_id)
+
+        if not details:
+            # Responder que no se encontraron los detalles
+            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+            requests.post(answer_url, data={
+                "callback_query_id": callback_id,
+                "text": "⚠️ Detalles no disponibles (email antiguo)",
+                "show_alert": True
+            }, timeout=10)
+            return False
+
+        # Construir mensaje con detalles completos
+        detail_text = f"""📧 <b>Detalles del Email</b>
+
+<b>De:</b> {details.get('sender', 'Desconocido')}
+<b>Asunto:</b> {details.get('subject', 'Sin asunto')}
+<b>Fecha:</b> {details.get('date', 'Sin fecha')}
+
+<b>Resumen:</b>
+{details.get('summary', 'Sin resumen')}
+
+<b>Contenido:</b>
+{details.get('body', 'Sin contenido')[:2000]}"""
+
+        # Editar el mensaje original para mostrar los detalles
+        edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+        edit_data = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": detail_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps({
+                "inline_keyboard": [[
+                    {
+                        "text": "📝 Ver resumen",
+                        "callback_data": f"summary_{email_id}"
+                    }
+                ]]
+            })
+        }
+
+        response = requests.post(edit_url, data=edit_data, timeout=10)
+        result = response.json()
+
+        # Responder al callback
+        answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+        requests.post(answer_url, data={
+            "callback_query_id": callback_id
+        }, timeout=10)
+
+        if response.status_code == 200 and result.get('ok'):
+            print(f"✅ Detalles mostrados para email {email_id}")
+            return True
+        else:
+            print(f"❌ Error al mostrar detalles: {result}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Error en handle_callback_query: {e}")
+        return False
+
+def handle_summary_callback(callback_query):
+    """Maneja el callback para volver al resumen"""
+    try:
+        callback_id = callback_query.get('id')
+        callback_data = callback_query.get('data', '')
+        message = callback_query.get('message', {})
+        chat_id = message.get('chat', {}).get('id')
+        message_id = message.get('message_id')
+
+        if not callback_data.startswith('summary_'):
+            return False
+
+        email_id = callback_data.replace('summary_', '')
+        details = get_email_details(email_id)
+
+        if not details:
+            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+            requests.post(answer_url, data={
+                "callback_query_id": callback_id,
+                "text": "⚠️ Información no disponible",
+                "show_alert": True
+            }, timeout=10)
+            return False
+
+        # Volver al mensaje con resumen
+        summary_text = f"📧 {details.get('summary', 'Sin resumen')}"
+
+        edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+        edit_data = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": summary_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps({
+                "inline_keyboard": [[
+                    {
+                        "text": "📋 Ver detalles",
+                        "callback_data": f"details_{email_id}"
+                    }
+                ]]
+            })
+        }
+
+        response = requests.post(edit_url, data=edit_data, timeout=10)
+
+        # Responder al callback
+        answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+        requests.post(answer_url, data={
+            "callback_query_id": callback_id
+        }, timeout=10)
+
+        return response.status_code == 200
+
+    except Exception as e:
+        print(f"❌ Error en handle_summary_callback: {e}")
+        return False
 
 def check_emails():
     """Revisa emails nuevos y envía notificaciones"""
@@ -231,18 +417,30 @@ def check_emails():
                     sender = msg.get('From', 'Desconocido')
                     subject = decode_email_subject(msg.get('Subject'))
                     body = get_email_body(msg)
+                    email_date = msg.get('Date', 'Sin fecha')
 
                     print(f"\n--- Procesando email ---")
                     print(f"De: {sender}")
                     print(f"Asunto: {subject}")
-                    print(f"Fecha: {msg.get('Date', 'Sin fecha')}")
+                    print(f"Fecha: {email_date}")
 
                     # Resumir con GPT
                     summary = summarize_email(sender, subject, body)
                     print(f"Resumen: {summary}")
 
-                    # Enviar notificación
-                    send_telegram_notification(summary)
+                    # Guardar detalles del email para el botón "Ver detalles"
+                    email_details = {
+                        'sender': sender,
+                        'subject': subject,
+                        'body': body,
+                        'date': email_date,
+                        'summary': summary,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    save_email_details(num_id, email_details)
+
+                    # Enviar notificación con botón "Ver detalles"
+                    send_telegram_notification(summary, email_id=num_id)
 
                     # Guardar último ID procesado
                     save_last_processed_id(num_id)

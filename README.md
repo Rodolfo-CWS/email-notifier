@@ -167,6 +167,46 @@ email-notifier/
 - `GET /` - Estado del servicio
 - `GET /check` - Ejecuta revisión de emails
 - `GET /health` - Health check
+- `GET /test-telegram` - Prueba configuración de Telegram
+- `POST /webhook` - Webhook para recibir callbacks de botones
+- `GET /setup-webhook` - Configura automáticamente el webhook de Telegram
+- `GET /webhook-info` - Muestra información del webhook actual
+- `GET /delete-webhook` - Elimina el webhook (útil para debugging)
+
+## 📋 Configurar Botón "Ver Detalles"
+
+Para que el botón "Ver detalles" funcione en Telegram, necesitas configurar el webhook:
+
+### 1. Agregar variable de entorno
+
+En Render, agrega la variable:
+```
+SERVICE_URL = https://tu-app.onrender.com
+```
+
+### 2. Configurar webhook
+
+Visita: `https://tu-app.onrender.com/setup-webhook`
+
+Deberías ver:
+```json
+{
+  "status": "success",
+  "message": "Webhook configurado correctamente",
+  "webhook_url": "https://tu-app.onrender.com/webhook"
+}
+```
+
+### 3. Verificar configuración
+
+Visita: `https://tu-app.onrender.com/webhook-info`
+
+### 4. Probar
+
+1. Ejecuta `/check` para procesar un email
+2. En Telegram, deberías ver el mensaje con un botón "Ver detalles"
+3. Presiona el botón para ver el contenido completo del email
+4. Presiona "Ver resumen" para volver al resumen
 
 ## 💰 Costos Estimados
 
