@@ -168,7 +168,7 @@ email-notifier/
 - `GET /check` - Ejecuta revisión de emails
 - `GET /health` - Health check
 - `GET /test-telegram` - Prueba configuración de Telegram
-- `POST /webhook` - Webhook para recibir callbacks de botones
+- `POST /webhook` o `/telegram-webhook` - Webhook para recibir callbacks de botones
 - `GET /setup-webhook` - Configura automáticamente el webhook de Telegram
 - `GET /webhook-info` - Muestra información del webhook actual
 - `GET /delete-webhook` - Elimina el webhook (útil para debugging)

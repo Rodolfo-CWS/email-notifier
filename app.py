@@ -108,6 +108,7 @@ def test_telegram():
         }), 500
 
 @app.route('/webhook', methods=['POST'])
+@app.route('/telegram-webhook', methods=['POST'])
 def webhook():
     """Webhook para recibir actualizaciones de Telegram (callbacks de botones)"""
     try:
